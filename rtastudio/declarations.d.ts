@@ -6,5 +6,11 @@ declare module "*.png" {
 declare module "*.jpg"; // Add these for other image types as well for consistency
 declare module "*.jpeg";
 declare module "*.gif";
-declare module "*.svg";
 declare module "*.webp";
+
+declare module "*.svg" {
+  import * as React from "react";
+  import { SvgProps } from "react-native-svg";
+  const content: React.FC<SvgProps>;
+  export default content;
+}

@@ -8,13 +8,16 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import "react-native-reanimated";
 import "./globals.css";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import "../global-polyfill";
-import { SafeAreaProvider } from "react-native-safe-area-context"; // Import SafeAreaProvider
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import Toast from "react-native-toast-message";
 
 import { useColorScheme } from "@/components/useColorScheme";
+
+// Prevent splash screen from hiding until fonts + prefetch done
+SplashScreen.preventAutoHideAsync();
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -22,20 +25,14 @@ export {
 } from "expo-router";
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
   initialRouteName: "(tabs)",
 };
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
-
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    Dzongkha: require("../assets/fonts/Dzongkha.ttf"),
     ...FontAwesome.font,
   });
 
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
   useEffect(() => {
     if (error) throw error;
   }, [error]);
@@ -46,9 +43,7 @@ export default function RootLayout() {
     }
   }, [loaded]);
 
-  if (!loaded) {
-    return null;
-  }
+  if (!loaded) return null;
 
   return <RootLayoutNav />;
 }
@@ -56,9 +51,22 @@ export default function RootLayout() {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
 
+  // Prefetch textiles once when app starts
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("https://rta-server.onrender.com/api/textile");
+        const data = await res.json();
+        await AsyncStorage.setItem("textiles", JSON.stringify(data));
+        console.log("Textiles prefetched and cached.");
+      } catch (err) {
+        console.error("Failed to preload textiles:", err);
+      }
+    })();
+  }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      {/* Wrap the entire app with SafeAreaProvider */}
       <SafeAreaProvider>
         <ThemeProvider
           value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
@@ -67,19 +75,20 @@ function RootLayoutNav() {
             <Stack.Screen name="index" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="login" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="canvas/[id]"
-              options={{ headerShown: false, gestureEnabled: false }}
-            />
             <Stack.Screen name="feedback" options={{ headerShown: false }} />
             <Stack.Screen
               name="explore/[id]"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="project/[projectId]"
               options={{ headerShown: false }}
             />
             <Stack.Screen name="+not-found" options={{ title: "Oops!" }} />
           </Stack>
         </ThemeProvider>
       </SafeAreaProvider>
+      <Toast />
     </GestureHandlerRootView>
   );
 }

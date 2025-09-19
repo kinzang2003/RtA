@@ -6,16 +6,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        main: "#0F172A",
-        blackoutlines: "#939393",
-        blue: "6998FF",
-        light: "#F2F2F7",
-        borderseparators: "#F4A9AA",
-        dark: "#111827",
-        placeholder: "#5E6367",
-      },
-      fontFamily: {
-        dzongkha: ["Dzongkha", "sans-serif"],
+        placeholder: "#939393",
       },
     },
   },

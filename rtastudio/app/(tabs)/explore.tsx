@@ -11,12 +11,31 @@ import { useEffect, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text, View } from "@/components/Themed";
 import { useColorScheme } from "nativewind";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import TextileListItem from "@/components/TextileListItem";
-import { Textile } from "@/types";
 import BhutanMap from "@/components/BhutanMap";
 
 type Language = "ENG" | "DZO";
+
+interface Textile {
+  id: string;
+  textileName: string;
+  origin: string;
+  duration: string;
+  description: string;
+  weavingProcesses: string;
+  dateAdded: string;
+  status: string;
+  image: string;
+  motifImage: string;
+  symbolismImage: string;
+  originImage: string;
+  weavingTechniqueImage: string;
+  symbolismText: string;
+  weavingTechniqueText: string;
+  type?: "ENG" | "DZO";
+}
 
 export default function ExploreScreen() {
   const router = useRouter();
@@ -25,7 +44,7 @@ export default function ExploreScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [isMapView, setIsMapView] = useState(false);
-  const [currentLanguage, setCurrentLanguage] = useState<Language>("ENG"); // New state for language
+  const [currentLanguage, setCurrentLanguage] = useState<Language>("ENG");
   const { colorScheme } = useColorScheme();
   const insets = useSafeAreaInsets();
 
@@ -37,101 +56,91 @@ export default function ExploreScreen() {
         setTextiles(data);
         setRefreshing(false);
       })
-      .catch((err) => {
-        console.error("Failed to refresh textiles:", err);
-        setRefreshing(false);
-      });
+      .catch(() => setRefreshing(false));
   };
 
   const filteredTextiles = textiles.filter(
     (item) =>
       (item.textileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.origin.toLowerCase().includes(searchQuery.toLowerCase())) &&
-      (currentLanguage === "ENG" ? item.type !== "DZO" : item.type === "DZO") // Filter based on language
+      (currentLanguage === "ENG" ? item.type !== "DZO" : item.type === "DZO")
   );
 
   useEffect(() => {
-    fetch("https://rta-server.onrender.com/api/textile")
-      .then((res) => res.json())
-      .then((data: Textile[]) => {
-        setTextiles(data);
+    const loadData = async () => {
+      const cached = await AsyncStorage.getItem("textiles");
+      if (cached) {
+        setTextiles(JSON.parse(cached));
         setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch textiles:", err);
-        setLoading(false);
-      });
+      }
+      fetch("https://rta-server.onrender.com/api/textile")
+        .then((res) => res.json())
+        .then((data: Textile[]) => {
+          setTextiles(data);
+          AsyncStorage.setItem("textiles", JSON.stringify(data));
+        })
+        .catch(() => {});
+    };
+
+    loadData();
   }, []);
 
-  const renderItem = ({ item }: { item: Textile }) => (
-    <TextileListItem
-      item={item}
-      language={currentLanguage} // Pass the current language to the list item
-      onPress={() =>
-        router.push({
-          pathname: "/explore/[id]",
-          params: { id: item.id, textile: JSON.stringify(item) },
-        })
-      }
-    />
-  );
-
   const toggleLanguage = () => {
-    setCurrentLanguage((prevLang) => (prevLang === "ENG" ? "DZO" : "ENG"));
+    setCurrentLanguage((prev) => (prev === "ENG" ? "DZO" : "ENG"));
   };
 
   const placeholderText =
     currentLanguage === "ENG"
       ? "Type in a pattern or dzongkhag"
-      : "དཔེ་རིས་དང་རྫོང་ཁག་གི་མིང་བཙུགས་དགོ།"; // Dzongkha for "Type in a pattern or dzongkhag"
+      : "དཔེ་རིས་དང་རྫོང་ཁག་གི་མིང་བཙུགས་དགོ།";
 
-  // Tailwind classes for Dzongkha font and increased size
-  const dzongkhaTextClass =
-    currentLanguage === "DZO" ? "font-dzongkha text-xl" : "";
-  const dzongkhaTitleClass =
-    currentLanguage === "DZO" ? "font-dzongkha text-6xl" : "";
-  const dzongkhaButtonTextClass =
-    currentLanguage === "DZO" ? "font-dzongkha text-4xl" : "";
-  const dzongkhaPlaceholderClass =
-    currentLanguage === "DZO" ? "font-dzongkha text-5xl" : "";
+  const dzongkhaFont = currentLanguage === "DZO" ? "font-dzongkha" : "";
 
   return (
-    <View
-      className="flex-1 px-6 bg-gray-100 dark:bg-gray-900"
-      style={{ paddingTop: insets.top + 24 }}
-    >
-      <TouchableOpacity onPress={toggleLanguage}>
+    <View className="flex-1 px-6" style={{ paddingTop: insets.top + 24 }}>
+      {/* Header with language switch */}
+      <View className="flex-row items-center justify-between mb-6">
         <Text
-          className={`text-3xl font-semibold mb-6 text-black dark:text-white ${dzongkhaTitleClass}`}
+          className={`text-3xl font-semibold text-black dark:text-white ${dzongkhaFont}`}
         >
           {currentLanguage === "ENG" ? "Explore" : "འཚོལ་ཞིབ།"}
         </Text>
-      </TouchableOpacity>
 
+        <TouchableOpacity
+          onPress={toggleLanguage}
+          className="px-3 py-1 rounded-md bg-gray-200 dark:bg-placeholder"
+        >
+          <Text className={`text-base font-medium ${dzongkhaFont}`}>
+            {currentLanguage === "ENG" ? " རྫོང་ཁ། " : "English"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Toggle buttons */}
       <View className="flex-row mb-6">
         <TouchableOpacity
           className={`${
-            isMapView
-              ? "bg-gray-200 dark:bg-gray-700"
-              : "bg-red-200 dark:bg-red-900"
+            !isMapView
+              ? "bg-red-200 dark:bg-red-700"
+              : "bg-gray-200 dark:bg-placeholder"
           } px-4 py-2 rounded-lg mr-2`}
           onPress={() => setIsMapView(false)}
         >
           <Text
             className={`${
-              isMapView
-                ? "text-gray-600 dark:text-gray-400"
-                : "text-red-500 dark:text-red-300"
-            } font-semibold ${dzongkhaButtonTextClass}`}
+              !isMapView
+                ? "text-red-500 dark:text-red-300"
+                : "text-gray-600 dark:text-gray-400"
+            } font-semibold ${dzongkhaFont} leading-none`}
           >
-            {currentLanguage === "ENG" ? "List" : "ཐོ་བུམ་"}
+            {currentLanguage === "ENG" ? "List" : "ཐོ་བུམ།"}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
           className={`${
             isMapView
-              ? "bg-red-200 dark:bg-red-900"
-              : "bg-gray-200 dark:bg-gray-700"
+              ? "bg-red-200 dark:bg-red-700"
+              : "bg-gray-200 dark:bg-placeholder"
           } px-4 py-2 rounded-lg`}
           onPress={() => setIsMapView(true)}
         >
@@ -140,23 +149,25 @@ export default function ExploreScreen() {
               isMapView
                 ? "text-red-500 dark:text-red-300"
                 : "text-gray-600 dark:text-gray-400"
-            } font-semibold ${dzongkhaButtonTextClass}`}
+            } font-semibold ${dzongkhaFont} leading-none`}
           >
-            {currentLanguage === "ENG" ? "Map" : "ས་ཁྲ་"}
+            {currentLanguage === "ENG" ? "Map" : "ས་ཁྲ།"}
           </Text>
         </TouchableOpacity>
       </View>
 
+      {/* Search input */}
       {!isMapView && (
         <TextInput
           placeholder={placeholderText}
-          placeholderTextColor={colorScheme === "dark" ? "#A0A0A0" : "#9ca3af"}
+          placeholderTextColor={colorScheme === "dark" ? "#FFFFFF" : "#9ca3af"}
           className={`
             ${Platform.OS === "ios" ? "shadow-md shadow-black/25" : "elevation-5"}
             bg-white dark:bg-placeholder
-            px-4 py-3 rounded-xl text-base text-gray-800 dark:text-white
+            px-4 py-3 rounded-xl text-lg
+            text-gray-800 dark:text-white
             mb-6 border border-gray-200 dark:border-placeholder
-            ${dzongkhaPlaceholderClass}
+            ${dzongkhaFont}
           `}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -164,14 +175,14 @@ export default function ExploreScreen() {
       )}
 
       {loading ? (
-        <View className="flex-1 justify-center items-center bg-transparent">
+        <View className="flex-1 justify-center items-center">
           <ActivityIndicator
             size="large"
             color={colorScheme === "dark" ? "white" : "gray"}
           />
         </View>
       ) : isMapView ? (
-        <View className="flex-1 justify-start items-center bg-transparent">
+        <View className="flex-1">
           <BhutanMap />
         </View>
       ) : (
@@ -180,9 +191,23 @@ export default function ExploreScreen() {
           onRefresh={handleRefresh}
           data={filteredTextiles}
           keyExtractor={(item) => item.id}
-          renderItem={renderItem}
+          renderItem={({ item }) => (
+            <TextileListItem
+              item={item}
+              language={currentLanguage}
+              onPress={() =>
+                router.push({
+                  pathname: "/explore/[id]",
+                  params: {
+                    id: item.id,
+                    textile: JSON.stringify(item),
+                    language: currentLanguage,
+                  },
+                })
+              }
+            />
+          )}
           contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
-          className="flex-1"
           showsVerticalScrollIndicator={false}
         />
       )}

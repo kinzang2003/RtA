@@ -1,8 +1,8 @@
 import React from "react";
-// Import Ionicons instead of FontAwesome for a thinner look
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Link, Tabs } from "expo-router";
 import { Pressable } from "react-native";
+import Feather from "@expo/vector-icons/Feather";
 
 import Colors from "@/constants/Colors";
 import { useColorScheme } from "@/components/useColorScheme";
@@ -22,18 +22,14 @@ function TabBarIcon(props: {
   return <Ionicons size={24} style={{ marginBottom: -3 }} {...props} />;
 }
 
-/**
- * Main TabLayout component for the bottom tab navigation.
- * Configures screen options and defines each tab.
- */
 export default function TabLayout() {
   const colorScheme = useColorScheme();
 
   return (
     <Tabs
       screenOptions={{
-        // Set the active tint color based on the current color scheme
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
+        // Set the active tint color to red (#b91c1c)
+        tabBarActiveTintColor: "#b91c1c",
         // Disable the static render of the header on web to prevent hydration errors
         headerShown: useClientOnlyValue(false, true),
       }}
@@ -79,9 +75,14 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: "Profile",
-          // Use 'person-outline' for a thinner user/profile icon
+          // Use the Feather icon for the profile tab
           tabBarIcon: ({ color }) => (
-            <TabBarIcon name="person-outline" color={color} />
+            <Feather
+              name="user"
+              size={24}
+              style={{ marginBottom: -3 }}
+              color={color}
+            />
           ),
           headerShown: false, // Hide header for this screen
         }}

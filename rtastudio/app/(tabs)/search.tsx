@@ -5,7 +5,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useEffect, useState } from "react";
-import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,106 +13,91 @@ import { useColorScheme } from "nativewind";
 import { getStableColorForId } from "@/utils/color";
 import { Text, View } from "@/components/Themed";
 
-type Room = {
+interface Project {
   id: string;
-  title?: string;
-  createdAt?: string;
-  color?: string; // Add color property
-};
-
-type SharedFile = {
-  id: string;
-  room?: Room;
-};
+  name?: string;
+  created_at?: string;
+  color?: string;
+}
 
 export default function Search() {
-  const [sharedFiles, setSharedFiles] = useState<SharedFile[]>([]);
-  const [userProjects, setUserProjects] = useState<Room[]>([]);
+  const [ownedProjects, setOwnedProjects] = useState<Project[]>([]);
+  const [sharedProjects, setSharedProjects] = useState<Project[]>([]);
+  const [projectColors, setProjectColors] = useState<Record<string, string>>(
+    {}
+  );
   const [searchQuery, setSearchQuery] = useState("");
-  const [roomColors, setRoomColors] = useState<Record<string, string>>({}); // Re-introduced for persistence
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colorScheme } = useColorScheme();
 
-  const fetchFromStorage = async () => {
-    setRefreshing(true);
-    try {
-      const storedOwnedRooms = await SecureStore.getItemAsync("rooms");
-      const storedInvitedRooms = await SecureStore.getItemAsync("roomInvites");
-      const storedColors = await SecureStore.getItemAsync("roomColors"); // Load room colors
+  useEffect(() => {
+    const fetchProjects = async () => {
+      setLoading(true);
+      try {
+        const storedOwned = await AsyncStorage.getItem("ownedProjects");
+        const storedShared = await AsyncStorage.getItem("invitedProjects");
+        const storedColors = await AsyncStorage.getItem("projectColors");
 
-      const currentRoomColors: Record<string, string> = storedColors
-        ? JSON.parse(storedColors)
-        : {};
-      let colorsUpdated = false;
+        const currentColors: Record<string, string> = storedColors
+          ? JSON.parse(storedColors)
+          : {};
+        let colorsUpdated = false;
 
-      if (storedOwnedRooms) {
-        const parsedOwnedRooms = JSON.parse(storedOwnedRooms);
-        const ownedRoomsWithColors = parsedOwnedRooms.map((room: Room) => {
-          if (!currentRoomColors[room.id]) {
-            currentRoomColors[room.id] = getStableColorForId(room.id); // Assign stable color
-            colorsUpdated = true;
-          }
-          return { ...room, color: currentRoomColors[room.id] }; // Add color to room object
-        });
-        setUserProjects(ownedRoomsWithColors);
-      } else {
-        setUserProjects([]);
-      }
-
-      if (storedInvitedRooms) {
-        const parsedInvitedRooms = JSON.parse(storedInvitedRooms);
-        const mappedInvitedRooms: SharedFile[] = parsedInvitedRooms.map(
-          (room: Room) => {
-            if (room.id && !currentRoomColors[room.id]) {
-              currentRoomColors[room.id] = getStableColorForId(room.id); // Assign stable color
+        if (storedOwned) {
+          const parsedOwned: Project[] = JSON.parse(storedOwned);
+          const withColors = parsedOwned.map((proj) => {
+            if (!currentColors[proj.id]) {
+              currentColors[proj.id] = getStableColorForId(proj.id);
               colorsUpdated = true;
             }
-            return {
-              id: room.id,
-              room: {
-                ...room,
-                color: room.id ? currentRoomColors[room.id] : undefined,
-              }, // Add color to nested room object
-            };
-          }
-        );
-        setSharedFiles(mappedInvitedRooms);
-      } else {
-        setSharedFiles([]);
-      }
+            return { ...proj, color: currentColors[proj.id] };
+          });
+          setOwnedProjects(withColors);
+        }
 
-      // Save updated colors back to SecureStore only if new colors were generated
-      if (colorsUpdated) {
-        await SecureStore.setItemAsync(
-          "roomColors",
-          JSON.stringify(currentRoomColors)
-        );
-      }
-      setRoomColors(currentRoomColors); // Update state with latest colors
-    } catch (error) {
-      console.error("Error loading search data:", error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
+        if (storedShared) {
+          const parsedShared: Project[] = JSON.parse(storedShared);
+          const withColors = parsedShared.map((proj) => {
+            if (!currentColors[proj.id]) {
+              currentColors[proj.id] = getStableColorForId(proj.id);
+              colorsUpdated = true;
+            }
+            return { ...proj, color: currentColors[proj.id] };
+          });
+          setSharedProjects(withColors);
+        }
 
-  useEffect(() => {
-    fetchFromStorage();
+        if (colorsUpdated) {
+          await AsyncStorage.setItem(
+            "projectColors",
+            JSON.stringify(currentColors)
+          );
+          setProjectColors(currentColors);
+        }
+      } catch (error) {
+        console.error("Error fetching projects in search:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProjects();
   }, []);
 
-  const filteredSharedFiles = sharedFiles.filter((file) =>
-    file.room?.title?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredOwned = ownedProjects.filter((p) =>
+    p.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredUserProjects = userProjects.filter((room) =>
-    room.title?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredShared = sharedProjects.filter((p) =>
+    p.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (refreshing) {
+  if (loading) {
     return (
-      <View className="flex-1 justify-center items-center bg-gray-100 dark:bg-gray-900">
+      <View className="flex-1 justify-center items-center">
         <ActivityIndicator
           size="large"
           color={colorScheme === "dark" ? "white" : "gray"}
@@ -122,111 +107,93 @@ export default function Search() {
   }
 
   return (
-    <View
-      className="flex-1 bg-gray-100 dark:bg-gray-900 px-6"
-      style={{ paddingTop: insets.top + 24 }}
-    >
+    <View className="flex-1 px-6" style={{ paddingTop: insets.top + 24 }}>
       <Text className="text-3xl font-semibold text-black dark:text-white mb-6">
         Search
       </Text>
+
       <TextInput
         value={searchQuery}
         onChangeText={setSearchQuery}
-        placeholder="Find files"
-        placeholderTextColor={colorScheme === "dark" ? "#A0A0A0" : "#9ca3af"}
-        className="bg-white dark:bg-placeholder px-4 py-3 rounded-xl text-base text-gray-800 dark:text-white mb-4"
+        placeholder="Find projects"
+        placeholderTextColor={colorScheme === "dark" ? "#FFFFFF" : "#9ca3af"}
+        className="bg-white dark:bg-placeholder px-4 py-3 rounded-xl text-base mb-6"
       />
-      <View className="mb-4 h-60 bg-transparent">
+
+      {/* Shared Projects */}
+      <View className="mb-6">
         <Text className="text-lg font-semibold mb-2 text-black dark:text-white">
           Shared with You
         </Text>
-        {filteredSharedFiles.length === 0 ? (
-          <Text className="text-gray-500 dark:text-gray-400 mb-0">
-            No files shared with you match this search.
+        {filteredShared.length === 0 ? (
+          <Text className="text-gray-500 dark:text-gray-400">
+            No shared projects match this search.
           </Text>
         ) : (
           <FlatList
-            data={filteredSharedFiles}
+            data={filteredShared}
             horizontal
             showsHorizontalScrollIndicator={false}
-            keyExtractor={(item) => item.room?.id || item.id}
-            style={{ flex: 1 }}
+            keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <TouchableOpacity
                 className="mr-4"
-                onPress={() => {
-                  if (item.room?.id) {
-                    router.push(`/canvas/${item.room.id}`);
-                  }
-                }}
+                onPress={() => router.push(`/project/${item.id}`)}
               >
                 <View
                   className="w-32 h-24 rounded-lg mb-1 justify-center items-center"
-                  style={{
-                    backgroundColor: item.room?.color || "#e5e7eb", // Use the assigned stable color
-                  }}
-                ></View>
-
+                  style={{ backgroundColor: item.color || "#e5e7eb" }}
+                />
                 <Text className="text-sm font-medium text-black dark:text-white">
-                  {item.room?.title || "Untitled"}
+                  {item.name || "Untitled"}
                 </Text>
                 <Text className="text-xs text-gray-500 dark:text-gray-400">
-                  {item.room?.createdAt
-                    ? `${formatDistanceToNow(
-                        new Date(item.room.createdAt)
-                      )} ago`
+                  {item.created_at
+                    ? `${formatDistanceToNow(new Date(item.created_at))} ago`
                     : "Unknown"}
                 </Text>
               </TouchableOpacity>
             )}
-            refreshing={refreshing}
-            onRefresh={fetchFromStorage}
           />
         )}
       </View>
-      <View style={{ flex: 1 }} className="bg-transparent">
-        <Text className="text-lg font-semibold mt-4 mb-2 text-black dark:text-white">
+
+      {/* Owned Projects */}
+      <View style={{ flex: 1 }}>
+        <Text className="text-lg font-semibold mb-2 text-black dark:text-white">
           Your Projects
         </Text>
-        {filteredUserProjects.length === 0 ? (
+        {filteredOwned.length === 0 ? (
           <Text className="text-gray-500 dark:text-gray-400">
             No projects match this search.
           </Text>
         ) : (
           <FlatList
-            data={filteredUserProjects}
+            data={filteredOwned}
             showsVerticalScrollIndicator={false}
             keyExtractor={(item) => item.id}
-            style={{ flex: 1 }}
             renderItem={({ item }) => (
               <TouchableOpacity
                 className="mb-4 flex-row items-center"
-                onPress={() => {
-                  router.push(`/canvas/${item.id}`);
-                }}
+                onPress={() => router.push(`/project/${item.id}`)}
               >
                 <View
                   className="w-32 h-24 rounded-lg mr-3 justify-center items-center"
-                  style={{
-                    backgroundColor: item.color || "#e5e7eb", // Use the assigned stable color
-                  }}
-                ></View>
-
-                <View className="flex-1 bg-transparent">
+                  style={{ backgroundColor: item.color || "#e5e7eb" }}
+                />
+                <View className="flex-1">
                   <Text className="text-base font-medium text-black dark:text-white">
-                    {item.title}
+                    {item.name || "Untitled"}
                   </Text>
                   <Text className="text-gray-500 dark:text-gray-400 text-sm">
-                    {item.createdAt
-                      ? `${formatDistanceToNow(new Date(item.createdAt))} ago`
+                    {item.created_at
+                      ? `${formatDistanceToNow(new Date(item.created_at))} ago`
                       : "Unknown"}
                   </Text>
                 </View>
               </TouchableOpacity>
             )}
             contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
-            refreshing={refreshing}
-            onRefresh={fetchFromStorage}
           />
         )}
       </View>

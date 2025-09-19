@@ -8,74 +8,56 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import * as SecureStore from "expo-secure-store";
-// Import Feather for the thinner user icon
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Feather from "@expo/vector-icons/Feather";
 import { Text, View } from "@/components/Themed";
 import { useColorScheme } from "nativewind";
-
-type UserData = {
-  id: string;
-  name: string;
-  email: string;
-};
-
-type Session = { deviceName: string; ipAddress: string };
+import { supabase } from "@/supabase";
 
 export default function Profile() {
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [profile, setProfile] = useState<any>(null);
+  const [sessions, setSessions] = useState<any[]>([]);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const { colorScheme } = useColorScheme();
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const storedUser = await SecureStore.getItemAsync("usedData");
-        const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+    const loadProfile = async () => {
+      const stored = await AsyncStorage.getItem("userProfile");
+      if (stored) setProfile(JSON.parse(stored));
 
-        if (parsedUser) {
-          setUserData({
-            id: parsedUser.id,
-            name: parsedUser.name,
-            email: parsedUser.email,
-          });
-
-          setSessions([
-            {
-              deviceName: "iPhone 14 Pro",
-              ipAddress: "192.168.1.5",
-            },
-            {
-              deviceName: "Chrome on MacBook",
-              ipAddress: "192.168.1.10",
-            },
-            {
-              deviceName: "Android Device",
-              ipAddress: "192.168.1.15",
-            },
-          ]);
-        }
-      } catch (error) {
-        console.error("Error loading user profile:", error);
-      }
+      setSessions([
+        { deviceName: "iPhone 14 Pro", ipAddress: "192.168.1.5" },
+        { deviceName: "Chrome on MacBook", ipAddress: "192.168.1.10" },
+        { deviceName: "Android Device", ipAddress: "192.168.1.15" },
+      ]);
     };
-
-    fetchUserData();
+    loadProfile();
   }, []);
 
   const logout = async () => {
-    await SecureStore.deleteItemAsync("authToken");
-    await SecureStore.deleteItemAsync("usedData");
-    await SecureStore.deleteItemAsync("rooms");
-    await SecureStore.deleteItemAsync("roomInvites");
-    await SecureStore.deleteItemAsync("roomColors");
-    router.replace("/login");
-  };
+    try {
+      // All the keys you used in LoginScreen
+      const keys = [
+        "supabaseSession",
+        "authToken",
+        "userProfile",
+        "ownedProjects",
+        "invitedProjects",
+        "projectIds",
+      ];
 
-  const handleDeleteAccount = () => {
-    setShowDeleteModal(true);
+      // Clear them in parallel
+      await AsyncStorage.multiRemove(keys);
+
+      // Optional: sign out from Supabase server-side
+      await supabase.auth.signOut();
+
+      // Navigate back to login
+      router.replace("/login");
+    } catch (err) {
+      console.error("Logout error:", err);
+    }
   };
 
   const confirmDelete = () => {
@@ -84,7 +66,7 @@ export default function Profile() {
     logout();
   };
 
-  if (!userData) {
+  if (!profile) {
     return (
       <View className="flex-1 justify-center items-center bg-white dark:bg-black">
         <ActivityIndicator
@@ -99,10 +81,8 @@ export default function Profile() {
   }
 
   return (
-    // Outer Themed.View to ensure the background color matches the theme
     <View className="flex-1">
       <ScrollView
-        // Removed bg-transparent from here. The parent View handles the background.
         className="flex-1 px-6"
         style={{ paddingTop: insets.top + 24 }}
       >
@@ -113,19 +93,18 @@ export default function Profile() {
         <View className="mb-6 p-4 rounded-lg">
           <View className="flex-row items-center mb-4">
             <View className="w-16 h-16 rounded-full mr-3 justify-center items-center">
-              {/* Changed to Feather icon with name 'user' */}
               <Feather
-                name="user" // Using Feather's user icon
-                size={32} // Adjusted size as needed, default is 24
-                color={colorScheme === "dark" ? "#9CA3AF" : "#6b7280"}
+                name="user"
+                size={32}
+                color={colorScheme === "dark" ? "#fff" : "#000"}
               />
             </View>
             <View className="flex-1">
               <Text className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-                Username
+                Full Name
               </Text>
               <Text className="text-base text-black dark:text-white">
-                {userData.name}
+                {profile.full_name}
               </Text>
             </View>
           </View>
@@ -133,7 +112,7 @@ export default function Profile() {
           <View className="mb-3">
             <Text className="text-sm mb-1">Email</Text>
             <Text className="text-base text-black dark:text-white">
-              {userData.email}
+              {profile.email}
             </Text>
           </View>
 
@@ -153,7 +132,10 @@ export default function Profile() {
             <Text className="text-lg font-semibold text-black dark:text-white">
               Signed In Devices
             </Text>
-            <TouchableOpacity onPress={logout}>
+            <TouchableOpacity
+              onPress={logout}
+              className="bg-gray-200 dark:bg-placeholder p-2 rounded"
+            >
               <Text className="text-blue-500 dark:text-blue-300 text-sm">
                 Sign Out of All...
               </Text>
@@ -183,7 +165,7 @@ export default function Profile() {
                 </Text>
               </View>
               <TouchableOpacity
-                className="py-2 px-4 rounded-md bg-gray-100 dark:bg-gray-700"
+                className="py-2 px-4 rounded-md bg-gray-200 dark:bg-placeholder"
                 onPress={logout}
               >
                 <Text className="text-sm text-black dark:text-white">
@@ -197,9 +179,8 @@ export default function Profile() {
         {/* Action Buttons Section */}
         <View className="p-4 pb-32 bg-transparent">
           <TouchableOpacity
-            // Updated classes for red background, red border, and red text
-            className="bg-red-200 dark:bg-red-700 border border-red-500 dark:border-red-600 p-4 rounded-lg items-center mb-6"
-            onPress={handleDeleteAccount}
+            className="bg-red-200 dark:bg-red-700 border border-red-500  p-4 rounded-lg items-center mb-6"
+            onPress={() => setShowDeleteModal(true)}
           >
             <Text lightColor="#ef4444" className="font-semibold">
               Delete Account
@@ -207,20 +188,19 @@ export default function Profile() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            className="border border-gray-900 dark:border-gray-300 p-4 rounded-lg items-center"
+            className="bg-gray-200 dark:bg-placeholder border border-gray-900 dark:border-gray-300 p-4 rounded-lg items-center"
             onPress={() =>
               router.push({
                 pathname: "/feedback",
-                params: { email: userData?.email, id: userData?.id },
+                params: { email: profile?.email, id: profile?.id },
               })
             }
           >
-            <Text className="text-gray-900 dark:text-gray-100 font-semibold">
-              Provide Feedback
-            </Text>
+            <Text className="font-semibold">Provide Feedback</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
+
       {/* Delete Account Confirmation Modal */}
       <Modal
         animationType="fade"
@@ -232,28 +212,30 @@ export default function Profile() {
           className="flex-1 bg-black/50 justify-center items-center"
           onPress={() => setShowDeleteModal(false)}
         >
-          <Pressable className="p-6 rounded-2xl mx-4 w-[90%] max-w-sm bg-white dark:bg-gray-800">
-            <Text className="text-xl font-bold text-center mb-4 text-black dark:text-white">
+          <Pressable className="p-6 rounded-2xl mx-4 w-[90%] max-w-sm bg-white dark:bg-[#1F1F1F]">
+            <Text className="text-xl font-bold text-center mb-4">
               Delete Account?
             </Text>
-            <Text className="text-gray-600 dark:text-gray-300 text-center mb-6">
+            <Text className="text-center mb-6">
               Are you sure you want to delete your account? This action cannot
               be undone.
             </Text>
-            <View className="flex-row space-x-3 bg-transparent">
+            <View
+              className="flex-row space-x-3"
+              lightColor="background: transparent"
+              darkColor="background: transparent"
+            >
               <TouchableOpacity
-                className="flex-1 p-4 rounded-lg bg-gray-100 dark:bg-gray-700"
+                className="flex-1 p-4 bg-gray-100 dark:bg-[#2C2C2C] rounded-lg"
                 onPress={() => setShowDeleteModal(false)}
               >
-                <Text className="text-center font-semibold text-black dark:text-white">
-                  Cancel
-                </Text>
+                <Text className="text-center font-semibold">Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 className="flex-1 bg-red-500 dark:bg-red-700 p-4 rounded-lg"
                 onPress={confirmDelete}
               >
-                <Text className="text-white text-center font-semibold">
+                <Text className="text-center font-semibold" lightColor="#fff">
                   Delete
                 </Text>
               </TouchableOpacity>

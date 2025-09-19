@@ -10,7 +10,7 @@ export default function TabTwoScreen() {
 
   return (
     <View
-      className="flex-1 bg-gray-100 dark:bg-gray-900" // Consistent background
+      className="flex-1 bg-gray-100 dark:bg-placeholder" // Consistent background
       style={{ paddingTop: insets.top + 24 }} // Consistent top padding
     >
       <BhutanMap />

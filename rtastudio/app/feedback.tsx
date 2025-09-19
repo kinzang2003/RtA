@@ -4,8 +4,7 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Modal,
-  Pressable,
+  FlatList, // Import FlatList for horizontal image display
 } from "react-native";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
@@ -14,9 +13,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "nativewind";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Text, View } from "@/components/Themed"; // Assuming this imports Themed Text and View
+import { Text, View } from "@/components/Themed";
+import Toast from "react-native-toast-message";
 
-// Define the type for the picked image
+// Define the type for a single picked image
 type PickedImage = {
   uri: string;
   name: string;
@@ -24,7 +24,6 @@ type PickedImage = {
 };
 
 export default function FeedbackForm() {
-  // Destructure params, ensuring they are strings or undefined
   const { email: routeEmail, id: routeId } = useLocalSearchParams<{
     email?: string;
     id?: string;
@@ -37,14 +36,8 @@ export default function FeedbackForm() {
   const [userId, setUserId] = useState<string>("");
   const [subject, setSubject] = useState<string>("");
   const [description, setDescription] = useState<string>("");
-  const [image, setImage] = useState<PickedImage | null>(null);
+  const [images, setImages] = useState<PickedImage[]>([]); // Changed to an array
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [showModal, setShowModal] = useState<boolean>(false);
-  const [modalMessage, setModalMessage] = useState<string>("");
-  const [modalTitle, setModalTitle] = useState<string>("");
-  const [modalType, setModalType] = useState<"success" | "error" | "info">(
-    "info"
-  );
 
   useEffect(() => {
     if (routeEmail) setEmail(routeEmail);
@@ -69,38 +62,47 @@ export default function FeedbackForm() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.7,
+      allowsMultipleSelection: true, // Enable multiple selection
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      const pickedAsset = result.assets[0];
-      setImage({
-        uri: pickedAsset.uri,
-        name:
-          pickedAsset.fileName ||
-          pickedAsset.uri.split("/").pop() ||
-          "image.jpg",
-        type: pickedAsset.type || "image/jpeg",
-      });
+      const selectedAssets: PickedImage[] = result.assets.map((asset) => ({
+        uri: asset.uri,
+        name: asset.fileName || asset.uri.split("/").pop() || "image.jpg",
+        type: asset.type || "image/jpeg",
+      }));
+      setImages(selectedAssets); // Set the array of selected images
     }
   };
 
-  const showCustomModal = (
-    title: string,
-    message: string,
-    type: "success" | "error" | "info"
+  const showToast = (
+    type: "success" | "error" | "info",
+    text1: string,
+    text2?: string,
+    onHideCallback?: () => void
   ) => {
-    setModalTitle(title);
-    setModalMessage(message);
-    setModalType(type);
-    setShowModal(true);
+    Toast.show({
+      type: type,
+      text1: text1,
+      text2: text2,
+      position: "bottom",
+      bottomOffset: 120,
+      visibilityTime: 4000,
+      onHide: onHideCallback,
+    });
   };
 
   const handleSubmit = async () => {
-    if (!email.trim() || !subject.trim() || !description.trim() || !image) {
-      showCustomModal(
-        "Error",
-        "All fields are required, including an image.",
-        "error"
+    if (
+      !email.trim() ||
+      !subject.trim() ||
+      !description.trim() ||
+      images.length === 0
+    ) {
+      showToast(
+        "error",
+        "Required fields missing",
+        "All fields are required, including at least one image."
       );
       return;
     }
@@ -112,13 +114,15 @@ export default function FeedbackForm() {
       formData.append("id", userId);
       formData.append("subject", subject);
       formData.append("description", description);
-      if (image) {
-        formData.append("image", {
+
+      // Loop through the images array to append each one to the form data
+      images.forEach((image, index) => {
+        formData.append(`image_${index}`, {
           uri: image.uri,
           name: image.name,
           type: image.type,
         } as any);
-      }
+      });
 
       const response = await fetch(
         "https://rta-server.onrender.com/api/feedback/userFeedback",
@@ -130,38 +134,28 @@ export default function FeedbackForm() {
       );
 
       if (response.ok) {
-        showCustomModal(
-          "Success",
-          "Feedback submitted successfully",
-          "success"
+        showToast(
+          "success",
+          "Feedback submitted!",
+          "Thank you for your feedback.",
+          () => router.replace("/profile")
         );
         setSubject("");
         setDescription("");
-        setImage(null);
+        setImages([]); // Clear the images array
       } else {
         const errorText = await response.text();
         console.log("Server error response:", errorText);
         throw new Error(errorText || "Submission failed");
       }
     } catch (error: any) {
-      showCustomModal(
-        "Error",
-        error.message || "An unexpected error occurred.",
-        "error"
+      showToast(
+        "error",
+        "Submission failed",
+        error.message || "An unexpected error occurred."
       );
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const getButtonColorClass = () => {
-    switch (modalType) {
-      case "success":
-        return "bg-green-500";
-      case "error":
-        return "bg-red-500";
-      default:
-        return "bg-blue-500";
     }
   };
 
@@ -171,8 +165,6 @@ export default function FeedbackForm() {
         className="flex-1 px-6"
         style={{
           paddingTop: insets.top + 24,
-          // Add padding to the bottom of the ScrollView to make space for the fixed button
-          paddingBottom: 100 + insets.bottom, // Adjust 100px based on button height + desired spacing
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -200,7 +192,7 @@ export default function FeedbackForm() {
         </View>
 
         {/* Form Fields */}
-        <View className="mb-6 bg-transparent">
+        <View className="mb-6">
           <Text className="text-base font-medium text-gray-800 dark:text-gray-200 mb-2">
             Email
           </Text>
@@ -208,10 +200,8 @@ export default function FeedbackForm() {
             value={email}
             onChangeText={setEmail}
             placeholder="your@email.com"
-            placeholderTextColor={
-              colorScheme === "dark" ? "#A0A0A0" : "#9ca3af"
-            }
-            className="border-b border-gray-300 dark:border-placeholder pb-2 mb-4 text-black dark:text-white"
+            placeholderTextColor="#939393"
+            className="border-b border-placeholder pb-2 mb-4 text-black dark:text-white"
             keyboardType="email-address"
             autoCapitalize="none"
           />
@@ -223,104 +213,54 @@ export default function FeedbackForm() {
             value={subject}
             onChangeText={setSubject}
             placeholder="Give the primary subject of the issue"
-            placeholderTextColor={
-              colorScheme === "dark" ? "#A0A0A0" : "#9ca3af"
-            }
-            className="border-b border-gray-300 dark:border-placeholder pb-2 mb-4 text-black dark:text-white"
+            placeholderTextColor="#939393"
+            className="border-b border-placeholder pb-2 mb-4 text-black dark:text-white"
           />
 
-          <Text className="text-base font-medium text-gray-800 dark:text-gray-200 mb-2">
-            Description
-          </Text>
+          <Text className="text-base font-medium mb-2">Description</Text>
           <TextInput
             value={description}
             onChangeText={setDescription}
             placeholder="Be as detailed as possible. What did you expect and what happened instead?"
-            placeholderTextColor={
-              colorScheme === "dark" ? "#A0A0A0" : "#9ca3af"
-            }
+            placeholderTextColor="#939393"
             multiline
             numberOfLines={6}
-            className="border-b border-gray-300 dark:border-placeholder pb-2 mb-4 text-base text-black dark:text-white"
+            className="border-b border-placeholder pb-2 mb-4 text-base text-black dark:text-white"
             textAlignVertical="top"
           />
         </View>
 
-        {/* Image Preview (if image is selected) - Moved inside ScrollView but above button for better flow */}
-        {image && (
-          <Image
-            source={{ uri: image.uri }}
-            style={{ width: "100%", height: 240, borderRadius: 8 }}
-            className="mb-4" // Keep some margin if it's not the last element
-          />
+        {/* Select Image Button */}
+        <View className="py-4 bg-transparent">
+          <TouchableOpacity
+            onPress={handlePickImage}
+            className="flex-row items-center justify-center gap-2 p-4 border border-dashed border-red-400 dark:border-red-600 rounded-md"
+          >
+            <Ionicons name="image-outline" size={24} color="red" />
+            <Text className="text-sm">Select image(s)</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Image Preview - Conditionally rendered with a FlatList for multiple images */}
+        {images.length > 0 && (
+          <View className="mt-4 mb-4">
+            <FlatList
+              horizontal
+              data={images}
+              renderItem={({ item }) => (
+                <View className="mr-2">
+                  <Image
+                    source={{ uri: item.uri }}
+                    style={{ width: 100, height: 100, borderRadius: 8 }}
+                  />
+                </View>
+              )}
+              keyExtractor={(item) => item.uri}
+              showsHorizontalScrollIndicator={false}
+            />
+          </View>
         )}
       </ScrollView>
-
-      {/* Select Image Button - Fixed at the bottom of the screen */}
-      <View
-        className="absolute bottom-0 left-0 right-0 px-6 py-4 bg-gray-100 dark:bg-gray-800"
-        style={{ paddingBottom: insets.bottom + 16 }} // Add safe area inset to bottom padding
-      >
-        <TouchableOpacity
-          onPress={handlePickImage}
-          className="flex-row items-center justify-center gap-2 p-4 border border-dashed border-red-400 dark:border-red-600 rounded-md"
-        >
-          <Ionicons name="image-outline" size={24} color="red" />
-          <Text className="text-sm text-gray-800 dark:text-gray-200">
-            Select image
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Custom Modal for Alerts */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={showModal}
-        onRequestClose={() => setShowModal(false)}
-      >
-        <Pressable
-          className="flex-1 bg-black/50 justify-center items-center"
-          onPress={() => {
-            setShowModal(false);
-            if (modalType === "success") {
-              router.replace("/profile");
-            }
-          }}
-        >
-          <Pressable
-            className={`p-6 rounded-2xl mx-4 w-[90%] max-w-sm ${
-              colorScheme === "dark" ? "bg-gray-700" : "bg-white"
-            }`}
-          >
-            <Text
-              className={`text-center mb-4 text-lg font-semibold ${
-                colorScheme === "dark" ? "text-white" : "text-black"
-              }`}
-            >
-              {modalTitle}
-            </Text>
-            <Text
-              className={`text-center mb-6 text-base ${
-                colorScheme === "dark" ? "text-gray-300" : "text-gray-600"
-              }`}
-            >
-              {modalMessage}
-            </Text>
-            <TouchableOpacity
-              className={`py-3 rounded-lg ${getButtonColorClass()}`}
-              onPress={() => {
-                setShowModal(false);
-                if (modalType === "success") {
-                  router.replace("/profile");
-                }
-              }}
-            >
-              <Text className="text-white text-center font-semibold">OK</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 }

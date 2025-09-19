@@ -58,10 +58,10 @@ export default function BhutanMap() {
                   hasTextile
                     ? `url(#pattern-${id})`
                     : colorScheme === "dark"
-                      ? "#4B5563"
-                      : "#d1d5db"
+                      ? "#939393"
+                      : "#ffffff"
                 }
-                stroke={colorScheme === "dark" ? "#1F2937" : "#000"}
+                stroke={colorScheme === "dark" ? "#fff" : "#000"}
                 strokeWidth={0.5}
                 onPress={() => setSelected(id)}
               />
@@ -74,7 +74,7 @@ export default function BhutanMap() {
         <View
           // Changed 'bottom-4' to 'top-4'
           className={`absolute right-4 top-4 p-3 rounded-lg max-w-[60%] elevation-4 
-            ${colorScheme === "dark" ? "bg-gray-800" : "bg-white"}`}
+            ${colorScheme === "dark" ? "bg-placeholder" : "bg-white"}`}
           style={{
             shadowColor: colorScheme === "dark" ? "#000" : "#000",
             shadowOffset: { width: 0, height: 2 },

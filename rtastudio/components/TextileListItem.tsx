@@ -1,19 +1,37 @@
 import React, { memo } from "react";
 import { TouchableOpacity, Dimensions } from "react-native";
-import { Image } from "expo-image"; // Import Image from expo-image
-import { Textile } from "@/types"; // Import the centralized Textile interface
+import { Image } from "expo-image";
 import { Text, View } from "@/components/Themed";
-import { getStableColorForId } from "@/utils/color"; // Import the stable color generator
+import { getStableColorForId } from "@/utils/color";
 
-// Make sure Language type is defined or imported, e.g., from "@/types" if moved there.
-type Language = "ENG" | "DZO"; // Assuming this definition is available or placed here for now.
+type Language = "ENG" | "DZO";
+
+interface Textile {
+  id: string;
+  textileName: string;
+  origin: string;
+  duration: string;
+  description: string;
+  weavingProcesses: string;
+  dateAdded: string;
+  status: string;
+  image: string;
+  motifImage: string;
+  symbolismImage: string;
+  originImage: string;
+  weavingTechniqueImage: string;
+  symbolismText: string;
+  weavingTechniqueText: string;
+  type?: "ENG" | "DZO";
+}
 
 interface TextileListItemProps {
   item: Textile;
   onPress: () => void;
-  language: Language; // Added language prop
+  language: Language;
 }
 
+// Helper: trim text
 const trimWords = (text: string, maxWords = 6) => {
   const words = text.trim().split(/\s+/);
   return words.length <= maxWords
@@ -21,20 +39,37 @@ const trimWords = (text: string, maxWords = 6) => {
     : words.slice(0, maxWords).join(" ") + "...";
 };
 
+// Labels dictionary
+const labels = {
+  ENG: {
+    origin: "Origin",
+    weaving: "Weaving Technique",
+    motifs: "Motifs Found",
+    symbolism: "Symbolism & Facts",
+  },
+  DZO: {
+    origin: "ཡུལ་སྐད།", // Dzongkha for "Origin"
+    weaving: "བཤོས་ལག་ལེན།", // Dzongkha for "Weaving Technique"
+    motifs: "དཔེ་རིས་འདུག་པ།", // Dzongkha for "Motifs Found"
+    symbolism: "དོན་དག་དང་བརྗོད་དོན།", // Dzongkha for "Symbolism & Facts"
+  },
+};
+
 const TextileListItem = memo(
   ({ item, onPress, language }: TextileListItemProps) => {
-    const screenWidth = Dimensions.get("window").width; // Still used for width calculation
-    // Use the stable color generator for consistent colors based on item.id
+    const screenWidth = Dimensions.get("window").width;
     const durationBgColor = getStableColorForId(item.id + "-duration");
     const textileNameBgColor = getStableColorForId(item.id + "-name");
 
-    // Conditional Tailwind class for Dzongkha font and increased size
+    // Classes for Dzongkha readability
     const dzongkhaItemTextClass =
-      language === "DZO" ? "font-dzongkha text-xl" : "";
+      language === "DZO" ? "font-dzongkha text-2xl" : "text-sm";
+
     const dzongkhaItemNameClass =
-      language === "DZO" ? "font-dzongkha text-2xl" : ""; // Larger for textile name
+      language === "DZO" ? "font-dzongkha text-3xl" : "text-base font-bold";
+
     const dzongkhaSmallItemTextClass =
-      language === "DZO" ? "font-dzongkha text-base" : ""; // For smaller text like Origin/Symbolism labels
+      language === "DZO" ? "font-dzongkha text-xl" : "text-xs";
 
     return (
       <TouchableOpacity onPress={onPress}>
@@ -52,30 +87,24 @@ const TextileListItem = memo(
           <View style={{ flexDirection: "row", height: 220 }}>
             {/* Column 1 */}
             <View style={{ flex: 2, marginRight: 8 }}>
-              {/* Row 1: Duration + Textile Name */}
-              <View
-                style={{
-                  flex: 1,
-                  flexDirection: "row",
-                  marginBottom: 4,
-                }}
-              >
+              {/* Duration + Textile Name */}
+              <View style={{ flex: 1, flexDirection: "row", marginBottom: 4 }}>
                 <View
                   style={{
                     flex: 1,
                     justifyContent: "center",
-                    backgroundColor: durationBgColor, // Now uses stable color
+                    backgroundColor: durationBgColor,
                     borderRadius: 8,
                   }}
                 >
                   <Text
-                    className={`text-xs text-center ${dzongkhaItemTextClass}`} // Apply class here
+                    className={`text-xs text-center ${dzongkhaItemTextClass}`}
                     style={{ color: "white" }}
                   >
                     {item.duration}
                   </Text>
                 </View>
-                {/* Textile Name Section with dark overlay and white text */}
+
                 <View
                   style={{
                     flex: 2,
@@ -87,21 +116,19 @@ const TextileListItem = memo(
                     alignItems: "center",
                   }}
                 >
-                  {/* Dark overlay for exposure effect */}
                   <View
                     style={{
                       position: "absolute",
                       width: "100%",
                       height: "100%",
-                      backgroundColor: textileNameBgColor, // Now uses stable color
-                      borderRadius: 8, // Match container border radius
+                      backgroundColor: textileNameBgColor,
+                      borderRadius: 8,
                     }}
                   />
-                  {/* Textile Name Text directly on top, now white */}
                   <Text
-                    className={`font-sm ${dzongkhaItemNameClass}`} // Apply class here
+                    className={`font-sm ${dzongkhaItemNameClass}`}
                     style={{
-                      color: "white", // Text color is white
+                      color: "white",
                       textAlign: "center",
                       fontWeight: "bold",
                     }}
@@ -111,7 +138,7 @@ const TextileListItem = memo(
                 </View>
               </View>
 
-              {/* Row 2: Origin Image + Main Image */}
+              {/* Origin Image + Main Image */}
               <View style={{ flex: 2, flexDirection: "row" }}>
                 <View
                   style={{
@@ -151,14 +178,14 @@ const TextileListItem = memo(
                     }}
                   >
                     <Text
-                      className={`text-center ${dzongkhaSmallItemTextClass}`} // Apply class here
+                      className={`text-center ${dzongkhaSmallItemTextClass}`}
                       style={{
                         color: "white",
                         fontWeight: "bold",
                         fontSize: 10,
                       }}
                     >
-                      Origin
+                      {labels[language].origin}
                     </Text>
                   </View>
                 </View>
@@ -186,7 +213,7 @@ const TextileListItem = memo(
               </View>
             </View>
 
-            {/* Column 2: Weaving Technique Image */}
+            {/* Column 2: Weaving Technique */}
             <View
               style={{
                 flex: 1,
@@ -197,11 +224,7 @@ const TextileListItem = memo(
             >
               <Image
                 source={{ uri: item.weavingTechniqueImage }}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  borderRadius: 12,
-                }}
+                style={{ width: "100%", height: "100%", borderRadius: 12 }}
                 contentFit="cover"
               />
               <View
@@ -224,14 +247,14 @@ const TextileListItem = memo(
                 }}
               >
                 <Text
-                  className={`text-center ${dzongkhaSmallItemTextClass}`} // Apply class here
+                  className={`text-center ${dzongkhaSmallItemTextClass}`}
                   style={{
                     color: "white",
                     fontWeight: "bold",
                     fontSize: 10,
                   }}
                 >
-                  WEAVING TECHNIQUE
+                  {labels[language].weaving}
                 </Text>
               </View>
               <Text
@@ -286,14 +309,14 @@ const TextileListItem = memo(
                 }}
               >
                 <Text
-                  className={`text-center ${dzongkhaSmallItemTextClass}`} // Apply class here
+                  className={`text-center ${dzongkhaSmallItemTextClass}`}
                   style={{
                     color: "white",
                     fontWeight: "bold",
                     fontSize: 10,
                   }}
                 >
-                  Motifs Found
+                  {labels[language].motifs}
                 </Text>
               </View>
             </View>
@@ -331,14 +354,14 @@ const TextileListItem = memo(
                 }}
               >
                 <Text
-                  className={`text-center ${dzongkhaSmallItemTextClass}`} // Apply class here
+                  className={`text-center ${dzongkhaSmallItemTextClass}`}
                   style={{
                     color: "white",
                     fontWeight: "bold",
                     fontSize: 10,
                   }}
                 >
-                  SYMBOLISM & FACTS
+                  {labels[language].symbolism}
                 </Text>
               </View>
               <Text

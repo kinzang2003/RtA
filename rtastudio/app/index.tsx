@@ -1,21 +1,19 @@
 import { images } from "@/constants/images";
 import {
-  View,
-  Text,
   Image,
   ImageBackground,
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import * as Linking from "expo-linking";
-import * as WebBrowser from "expo-web-browser";
 import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
+import { View, Text } from "@/components/Themed";
+import { ExternalLink } from "@/components/ExternalLink"; // 👈 import it
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const checkIfLoggedIn = async () => {
     const token = await SecureStore.getItemAsync("authToken");
@@ -29,16 +27,6 @@ export default function WelcomeScreen() {
   useEffect(() => {
     checkIfLoggedIn();
   }, []);
-
-  const handleSignup = async () => {
-    const signupURL = `https://rta-studio.vercel.app/signup?redirect=${encodeURIComponent(
-      Linking.createURL("/auth")
-    )}`;
-    await WebBrowser.openAuthSessionAsync(
-      signupURL,
-      Linking.createURL("/auth")
-    );
-  };
 
   if (loading) {
     return (
@@ -68,23 +56,29 @@ export default function WelcomeScreen() {
         resizeMode="contain"
       />
 
+      {/* Internal navigation */}
       <TouchableOpacity
         onPress={() => router.push("/login")}
-        className="bg-main py-3 px-6 rounded-lg w-64 mb-4 mt-8"
+        className="bg-gray-900 py-3 px-6 rounded-lg mb-4 mt-8 w-[90%] max-w-[300px]"
       >
-        <Text className="text-light text-lg font-[14px] text-center">
+        <Text className="text-lg font-[14px] text-center" lightColor="#ffffff">
           Log in to RTA
         </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
-        onPress={handleSignup}
-        className="border border-blackoutlines py-3 px-6 rounded-lg w-64"
+      {/* External link for signup */}
+      <ExternalLink
+        href="https://rtastudio-v2.vercel.app/signup"
+        className="border border-placeholder py-3 px-6 rounded-lg w-[90%] max-w-[300px]"
       >
-        <Text className="text-blackoutlines text-lg font-semibold text-center">
+        <Text
+          className="text-lg font-semibold text-center"
+          lightColor="#939393"
+          darkColor="#939393"
+        >
           Sign up
         </Text>
-      </TouchableOpacity>
+      </ExternalLink>
     </ImageBackground>
   );
 }
