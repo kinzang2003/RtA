@@ -46,6 +46,12 @@ export default function LoginScreen() {
         return;
       }
 
+      await AsyncStorage.setItem(
+        "supabaseSession",
+        JSON.stringify(data.session)
+      );
+      await AsyncStorage.setItem("authToken", data.session.access_token);
+
       // Save full session for WebView injection
       await AsyncStorage.setItem(
         "supabaseSession",

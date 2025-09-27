@@ -1,92 +1,44 @@
-import React from "react";
+// app/(tabs)/_layout.tsx
+import { Tabs } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Link, Tabs } from "expo-router";
-import { Pressable } from "react-native";
-import Feather from "@expo/vector-icons/Feather";
-
-import Colors from "@/constants/Colors";
-import { useColorScheme } from "@/components/useColorScheme";
-import { useClientOnlyValue } from "@/components/useClientOnlyValue";
-
-/**
- * TabBarIcon component for displaying icons in the tab bar.
- * Uses Ionicons for a thinner, outlined appearance.
- * @param props - Contains the icon name and color.
- */
-function TabBarIcon(props: {
-  // Use React.ComponentProps<typeof Ionicons>['name'] for Ionicons' name type
-  name: React.ComponentProps<typeof Ionicons>["name"];
-  color: string;
-}) {
-  // Render Ionicons component
-  return <Ionicons size={24} style={{ marginBottom: -3 }} {...props} />;
-}
+import { useColorScheme } from "nativewind";
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const { colorScheme } = useColorScheme();
 
   return (
     <Tabs
-      screenOptions={{
-        // Set the active tint color to red (#b91c1c)
-        tabBarActiveTintColor: "#b91c1c",
-        // Disable the static render of the header on web to prevent hydration errors
-        headerShown: useClientOnlyValue(false, true),
-      }}
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarShowLabel: true,
+        tabBarStyle: {
+          borderTopWidth: 0,
+          elevation: 0,
+          backgroundColor: colorScheme === "dark" ? "#111" : "#fff",
+        },
+        tabBarIcon: ({ color, focused }) => {
+          let iconName: keyof typeof Ionicons.glyphMap = "ellipse";
+
+          if (route.name === "index") {
+            iconName = focused ? "time" : "time-outline"; // Recents
+          } else if (route.name === "search") {
+            iconName = focused ? "search" : "search-outline"; // Search
+          } else if (route.name === "explore") {
+            iconName = focused ? "compass" : "compass-outline"; // Explore
+          } else if (route.name === "profile") {
+            iconName = focused ? "person" : "person-outline"; // Profile
+          }
+
+          return <Ionicons name={iconName} size={24} color={color} />;
+        },
+        tabBarActiveTintColor: "#b91c1c", // red-700
+        tabBarInactiveTintColor: colorScheme === "dark" ? "#aaa" : "#444",
+      })}
     >
-      {/* Recents Tab */}
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Recents",
-          // Use 'time-outline' for a thinner history/recents icon
-          tabBarIcon: ({ color }) => (
-            <TabBarIcon name="time-outline" color={color} />
-          ),
-          headerShown: false, // Hide header for this screen
-        }}
-      />
-      {/* Search Tab */}
-      <Tabs.Screen
-        name="search"
-        options={{
-          title: "Search",
-          // Use 'search-outline' for a thinner search icon
-          tabBarIcon: ({ color }) => (
-            <TabBarIcon name="search-outline" color={color} />
-          ),
-          headerShown: false, // Hide header for this screen
-        }}
-      />
-      {/* Explore Tab */}
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: "Explore",
-          // Use 'compass-outline' for a thinner explore/compass icon
-          tabBarIcon: ({ color }) => (
-            <TabBarIcon name="compass-outline" color={color} />
-          ),
-          headerShown: false, // Hide header for this screen
-        }}
-      />
-      {/* Profile Tab */}
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Profile",
-          // Use the Feather icon for the profile tab
-          tabBarIcon: ({ color }) => (
-            <Feather
-              name="user"
-              size={24}
-              style={{ marginBottom: -3 }}
-              color={color}
-            />
-          ),
-          headerShown: false, // Hide header for this screen
-        }}
-      />
+      <Tabs.Screen name="index" options={{ title: "Recents" }} />
+      <Tabs.Screen name="search" options={{ title: "Search" }} />
+      <Tabs.Screen name="explore" options={{ title: "Explore" }} />
+      <Tabs.Screen name="profile" options={{ title: "Profile" }} />
     </Tabs>
   );
 }

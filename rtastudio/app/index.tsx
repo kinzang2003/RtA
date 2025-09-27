@@ -9,7 +9,7 @@ import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useState } from "react";
 import { View, Text } from "@/components/Themed";
-import { ExternalLink } from "@/components/ExternalLink"; // 👈 import it
+import { ExternalLink } from "@/components/ExternalLink";
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -68,7 +68,7 @@ export default function WelcomeScreen() {
 
       {/* External link for signup */}
       <ExternalLink
-        href="https://rtastudio-v2.vercel.app/signup"
+        href="https://rtastudio.rtabhutan.org/auth"
         className="border border-placeholder py-3 px-6 rounded-lg w-[90%] max-w-[300px]"
       >
         <Text

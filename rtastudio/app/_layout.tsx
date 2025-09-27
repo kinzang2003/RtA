@@ -16,13 +16,9 @@ import Toast from "react-native-toast-message";
 
 import { useColorScheme } from "@/components/useColorScheme";
 
-// Prevent splash screen from hiding until fonts + prefetch done
 SplashScreen.preventAutoHideAsync();
 
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-} from "expo-router";
+export { ErrorBoundary } from "expo-router";
 
 export const unstable_settings = {
   initialRouteName: "(tabs)",

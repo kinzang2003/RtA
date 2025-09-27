@@ -1,16 +1,30 @@
 // textileDzongkhags.ts
 export const textileDzongkhags = {
-  BTGA: require("../assets/textiles/Kushuthara.png"),
-  BT24: require("../assets/textiles/Kushuthara.png"),
-  BT32: require("../assets/textiles/Kushuthara.png"),
-  BT33: require("../assets/textiles/Kushuthara.png"),
+  BTGA: require("../assets/textiles/Hortha_Jalo.png"),
+  BT33: require("../assets/textiles/Yathra.jpg"),
+  BT32: require("../assets/textiles/Yathra.jpg"),
+  BT24: require("../assets/textiles/Adha_Mathra.jpg"),
   BT44: require("../assets/textiles/Kushuthara.png"),
-  BT34: require("../assets/textiles/Kushuthara.png"),
-  BT42: require("../assets/textiles/sethra.jpg"),
-  BT43: require("../assets/textiles/Kushuthara.png"),
-  BT41: require("../assets/textiles/Kushuthara.png"),
-  BT45: require("../assets/textiles/Kushuthara.png"),
+  BT34: require("../assets/textiles/Nettle_Bura.jpg"),
+  BT42: require("../assets/textiles/Sethra.jpg"),
+  BT43: require("../assets/textiles/Pangtsi.jpg"),
+  BT41: require("../assets/textiles/Dromchuchema.jpg"),
+  BT45: require("../assets/textiles/Kera.jpg"),
+  BT23: require("../assets/textiles/Hortha_Jalo.png"),
 };
+
+// export const textileDzongkhags = {
+//   BTGA: require("../assets/textiles/Kushuthara.png"),
+//   BT24: require("../assets/textiles/Kushuthara.png"),
+//   BT32: require("../assets/textiles/Kushuthara.png"),
+//   BT33: require("../assets/textiles/Kushuthara.png"),
+//   BT44: require("../assets/textiles/Kushuthara.png"),
+//   BT34: require("../assets/textiles/Kushuthara.png"),
+//   BT42: require("../assets/textiles/Sethra.jpg"),
+//   BT43: require("../assets/textiles/Kushuthara.png"),
+//   BT41: require("../assets/textiles/Kushuthara.png"),
+//   BT45: require("../assets/textiles/Kushuthara.png"),
+// };
 
 // Extracted path data from SvgComponent.tsx
 export const dzongkhagPaths = {
@@ -37,7 +51,44 @@ export const dzongkhagPaths = {
 };
 
 export const textileInfo: Record<string, { name: string; textile: string }> = {
-  BTGA: { name: "Gasa", textile: "Yathra weaving" },
-  BT33: { name: "Bumthang", textile: "Woolen textiles like Mathra and Yathra" },
-  // ...other dzongkhags
+  BTGA: {
+    name: "Gasa",
+    textile: "Hortha Jalo, Pchana",
+  },
+  BT24: {
+    name: "Wangdue Phodrang",
+    textile: "Adha Rachu, Adha Mathra",
+  },
+  BT32: {
+    name: "Trongsa",
+    textile: "Yathra, Sethra, Mathra",
+  },
+  BT33: {
+    name: "Bumthang",
+    textile: "Yathra, Sethra, Mathra",
+  },
+  BT34: {
+    name: "Zhemgang",
+    textile: "Nettle, Bura",
+  },
+  BT41: {
+    name: "Trashigang",
+    textile: "Jadrichema, Mentsi Mathra, Lungserma, Moentha, Dromchuchema",
+  },
+  BT42: {
+    name: "Mongar",
+    textile: "Pangtsi, Sethra, Kamtham, Yeutham, Thara",
+  },
+  BT43: {
+    name: "Pemagatshel",
+    textile: "Pangtsi, Sethra, Kamtham, Yeutham, Thara",
+  },
+  BT44: {
+    name: "Lhuentse",
+    textile: "Kushuthara, Ngosham, Aikapur",
+  },
+  BT45: {
+    name: "Samdrup Jongkhar",
+    textile: "Kera",
+  },
 };
