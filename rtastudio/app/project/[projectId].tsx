@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { WebView } from "react-native-webview";
 import { useLocalSearchParams } from "expo-router";
@@ -10,36 +10,102 @@ export default function ProjectCanvasScreen() {
   const webviewRef = useRef<WebView>(null);
 
   const [session, setSession] = useState<any>(null);
-  const [email, setEmail] = useState<string | null>(null);
-  const [password, setPassword] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [webViewLoaded, setWebViewLoaded] = useState(false);
+
+  // Create stable onMessage handler
+  const handleWebViewMessage = useCallback(
+    (event: any) => {
+      const message = event.nativeEvent.data;
+      console.log("WebView message:", message);
+
+      // If session injection failed, try alternative approach
+      if (message.includes("No existing session") && session) {
+        console.log("Attempting fallback session injection");
+        const sessionToken = {
+          currentSession: {
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+            token_type: "bearer",
+            user: { id: session.user.id },
+          },
+          currentUser: { id: session.user.id },
+        };
+
+        const fallbackScript = `
+        (function() {
+          try {
+            const token = ${JSON.stringify(sessionToken)};
+            localStorage.setItem("supabase.auth.token", JSON.stringify(token));
+            localStorage.setItem("sb-rtastudio-auth-token", JSON.stringify(token));
+            window.dispatchEvent(new Event("storage"));
+            console.log("Fallback session injection successful");
+            window.ReactNativeWebView.postMessage("✅ Fallback session injected");
+          } catch (e) {
+            console.error("Fallback injection failed:", e);
+            window.ReactNativeWebView.postMessage("❌ Fallback injection error: " + e.message);
+          }
+        })();
+      `;
+
+        if (webviewRef.current) {
+          webviewRef.current.injectJavaScript(fallbackScript);
+        }
+      }
+    },
+    [session]
+  ); // Only depends on session
 
   useEffect(() => {
     (async () => {
       try {
-        // Load stored session
+        console.log("Loading session for project:", projectId);
+
+        // Load stored session from deep linking authentication
         const storedSession = await AsyncStorage.getItem("supabaseSession");
-        const storedEmail = await AsyncStorage.getItem("loginEmail");
-        const storedPassword = await AsyncStorage.getItem("loginPassword");
+        console.log("Stored session exists:", !!storedSession);
 
-        setEmail(storedEmail);
-        setPassword(storedPassword);
+        if (storedSession) {
+          let parsedSession = JSON.parse(storedSession);
+          console.log(
+            "Session parsed, has access_token:",
+            !!parsedSession.access_token
+          );
 
-        let parsedSession = storedSession ? JSON.parse(storedSession) : null;
-
-        if (parsedSession) {
-          // Try refresh
+          // Try to refresh the session to ensure it's still valid
           const { data, error } = await supabase.auth.refreshSession({
             refresh_token: parsedSession.refresh_token,
           });
 
           if (!error && data?.session) {
+            console.log("Session refreshed successfully");
             parsedSession = data.session;
+            // Update stored session with refreshed one
             await AsyncStorage.setItem(
               "supabaseSession",
               JSON.stringify(parsedSession)
             );
             setSession(parsedSession);
+          } else {
+            console.log("Session refresh failed:", error);
+            // If refresh fails, try to get current session
+            const { data: currentSession } = await supabase.auth.getSession();
+            if (currentSession?.session) {
+              console.log("Using current session from Supabase");
+              setSession(currentSession.session);
+            } else {
+              console.log("No valid session available");
+            }
+          }
+        } else {
+          console.log("No stored session, checking for current session");
+          // Fallback: try to get current session if no stored session
+          const { data: currentSession } = await supabase.auth.getSession();
+          if (currentSession?.session) {
+            console.log("Found current session");
+            setSession(currentSession.session);
+          } else {
+            console.log("No session available at all");
           }
         }
 
@@ -49,7 +115,7 @@ export default function ProjectCanvasScreen() {
         setReady(true);
       }
     })();
-  }, []);
+  }, [projectId]);
 
   if (!projectId || !ready) {
     return (
@@ -61,51 +127,70 @@ export default function ProjectCanvasScreen() {
 
   const canvasUrl = `https://rtastudio-v2.vercel.app/project/${projectId}`;
 
-  // Inject JS: either session or invisible login form autofill
-  const injectedJS = session
-    ? `
-      (function() {
-        try {
-          const token = {
-            currentSession: {
-              access_token: "${session.access_token}",
-              refresh_token: "${session.refresh_token}",
-              token_type: "bearer",
-              user: { id: "${session.user.id}" }
-            },
-            currentUser: { id: "${session.user.id}" }
-          };
-          localStorage.setItem("supabase.auth.token", JSON.stringify(token));
-          window.dispatchEvent(new Event("storage"));
-          window.ReactNativeWebView.postMessage("✅ Injected access_token");
-        } catch (e) {
-          window.ReactNativeWebView.postMessage("❌ Injection error: " + e.message);
-        }
-      })();
-      true;
-    `
-    : `
-      (function() {
-        try {
-          // Autofill login form
-          const emailField = document.querySelector('input[type="email"]');
-          const passwordField = document.querySelector('input[type="password"]');
-          const loginForm = emailField?.closest('form');
-
-          if(emailField && passwordField && loginForm){
-            emailField.value = "${email || ""}";
-            passwordField.value = "${password || ""}";
-            loginForm.submit(); // auto-submit
-            window.ReactNativeWebView.postMessage("✅ Autofilled login and submitted");
-          } else {
-            window.ReactNativeWebView.postMessage("⚠️ No login form found");
+  // Inject JS: session token for web app authentication
+  const injectedJS = `
+    (function() {
+      try {
+        // Listen for session injection from React Native
+        window.addEventListener('message', function(event) {
+          if (event.data && event.data.type === 'SESSION_INJECT') {
+            const token = event.data.token;
+            localStorage.setItem("supabase.auth.token", JSON.stringify(token));
+            window.dispatchEvent(new Event("storage"));
+            window.ReactNativeWebView.postMessage("✅ Session injected via postMessage");
           }
-        } catch(e){
-          window.ReactNativeWebView.postMessage("❌ Autofill error: "+e.message);
+        });
+
+        // Check if session is already available
+        const existingToken = localStorage.getItem("supabase.auth.token");
+        if (existingToken) {
+          window.ReactNativeWebView.postMessage("✅ Existing session found");
+        } else {
+          window.ReactNativeWebView.postMessage("⚠️ No existing session");
         }
-      })();
-      true;
-    `;
+      } catch (e) {
+        window.ReactNativeWebView.postMessage("❌ Initial setup error: " + e.message);
+      }
+    })();
+    true;
+  `;
+
+  // Inject session after WebView loads
+  useEffect(() => {
+    if (webViewLoaded && session && webviewRef.current) {
+      // Add a small delay to ensure WebView is fully ready
+      const timer = setTimeout(() => {
+        const sessionToken = {
+          currentSession: {
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+            token_type: "bearer",
+            user: { id: session.user.id },
+          },
+          currentUser: { id: session.user.id },
+        };
+
+        const injectScript = `
+          (function() {
+            try {
+              const token = ${JSON.stringify(sessionToken)};
+              localStorage.setItem("supabase.auth.token", JSON.stringify(token));
+              // Also try the alternative key that some Supabase versions use
+              localStorage.setItem("sb-rtastudio-auth-token", JSON.stringify(token));
+              window.dispatchEvent(new Event("storage"));
+              window.ReactNativeWebView.postMessage("✅ Session injected after load");
+            } catch (e) {
+              window.ReactNativeWebView.postMessage("❌ Post-load injection error: " + e.message);
+            }
+          })();
+        `;
+
+        webviewRef.current?.injectJavaScript(injectScript);
+      }, 1000); // 1 second delay
+
+      return () => clearTimeout(timer);
+    }
+  }, [webViewLoaded, session]);
 
   return (
     <WebView
@@ -117,14 +202,16 @@ export default function ProjectCanvasScreen() {
       originWhitelist={["*"]}
       injectedJavaScriptBeforeContentLoaded={injectedJS}
       startInLoadingState
+      onLoadEnd={() => {
+        console.log("WebView loaded");
+        setWebViewLoaded(true);
+      }}
       renderLoading={() => (
         <View className="flex-1 justify-center items-center bg-white">
           <ActivityIndicator size="large" />
         </View>
       )}
-      onMessage={(event) => {
-        console.log("WebView message:", event.nativeEvent.data);
-      }}
+      onMessage={handleWebViewMessage}
       sharedCookiesEnabled={true}
       thirdPartyCookiesEnabled={true}
     />

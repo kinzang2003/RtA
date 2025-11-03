@@ -6,20 +6,25 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
-import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState } from "react";
 import { View, Text } from "@/components/Themed";
 import { ExternalLink } from "@/components/ExternalLink";
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const checkIfLoggedIn = async () => {
-    const token = await SecureStore.getItemAsync("authToken");
-    if (token) {
-      router.replace("/(tabs)");
-    } else {
+    try {
+      const session = await AsyncStorage.getItem("supabaseSession");
+      if (session) {
+        router.replace("/(tabs)");
+      } else {
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error("Error checking session:", error);
       setLoading(false);
     }
   };
