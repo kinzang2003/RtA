@@ -48,5 +48,117 @@ target 'rtastudio' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => podfile_properties['apple.ccacheEnabled'] == 'true',
     )
+
+    # Disable user script sandboxing everywhere to prevent resource copy denials
+    installer.aggregate_targets.each do |aggregate_target|
+      aggregate_target.user_project.build_configurations.each do |config|
+        config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+        config.build_settings['SYMROOT'] = '$(DERIVED_FILE_DIR)'
+        config.build_settings['SHARED_PRECOMPS_DIR'] = '$(DERIVED_FILE_DIR)'
+      end
+      aggregate_target.user_project.native_targets.each do |native_target|
+        native_target.build_configurations.each do |config|
+          config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+        end
+      end
+    end
+
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+      end
+    end
+
+    # Explicitly patch the app target (rtastudio)
+    installer.aggregate_targets.map(&:user_project).uniq.compact.each do |proj|
+      proj.targets.each do |t|
+        next unless t.name == 'rtastudio'
+        t.build_configurations.each do |cfg|
+          if cfg.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] != 'NO'
+            cfg.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+            UI.puts "[post_install] Set ENABLE_USER_SCRIPT_SANDBOXING=NO for target #{t.name} (#{cfg.name})"
+          end
+        end
+      end
+      proj.save
+    end
+
+    # Patch all generated Pods resources scripts to avoid rsync sandbox issues
+    resources_scripts_glob = File.join(__dir__, 'Pods', 'Target Support Files', '**', '*-resources.sh')
+    Dir.glob(resources_scripts_glob).each do |script_path|
+      next unless File.file?(script_path)
+      contents = File.read(script_path)
+      original_line = 'RESOURCES_TO_COPY=${PODS_ROOT}/resources-to-copy-${TARGETNAME}.txt'
+      patched_line  = 'RESOURCES_TO_COPY=${TARGET_TEMP_DIR}/resources-to-copy-${TARGETNAME}.txt'
+      if contents.include?(original_line) && !contents.include?(patched_line)
+        contents = contents.sub(original_line, patched_line)
+        UI.puts "[post_install] Patched #{File.basename(script_path)} to use TARGET_TEMP_DIR for RESOURCES_TO_COPY"
+      end
+
+      mkdir_snippet = "mkdir -p \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\n"
+      unless contents.include?(mkdir_snippet)
+        if contents =~ /\A(#!.*\n)?set -e\n/
+          contents = contents.sub(/\A(#!.*\n)?set -e\n/, "\\0#{mkdir_snippet}")
+        else
+          contents = mkdir_snippet + contents
+        end
+        UI.puts "[post_install] Ensured resources destination exists in #{File.basename(script_path)}"
+      end
+
+      # Remove rsync bulk copy lines and replace with ditto loop
+      rsync_pattern = /rsync -avr --copy-links --no-relative --exclude '\*\/.svn\/\*' --files-from="\$RESOURCES_TO_COPY" \/ "\$\{TARGET_BUILD_DIR\}\/\$\{UNLOCALIZED_RESOURCES_FOLDER_PATH\}"/
+      if contents.match?(rsync_pattern)
+        contents = contents.gsub(rsync_pattern, <<~'BASH'.strip)
+while IFS= read -r resource; do
+  [ -z "$resource" ] && continue
+  if [ -e "$resource" ]; then
+    base="$(basename "$resource")"
+    if [ -d "$resource" ]; then
+      ditto "$resource" "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/$base"
+    else
+      ditto "$resource" "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/$base"
+    fi
+  fi
+done < "$RESOURCES_TO_COPY"
+BASH
+        UI.puts "[post_install] Replaced rsync bulk copy with ditto loop in #{File.basename(script_path)}"
+      end
+
+      install_rsync_pattern = /rsync -avr --copy-links --no-relative --exclude '\*\/.svn\/\*' --files-from="\$RESOURCES_TO_COPY" \/ "\$\{INSTALL_DIR\}\/\$\{UNLOCALIZED_RESOURCES_FOLDER_PATH\}"/
+      if contents.match?(install_rsync_pattern)
+        contents = contents.gsub(install_rsync_pattern, <<~'BASH'.strip)
+while IFS= read -r resource; do
+  [ -z "$resource" ] && continue
+  if [ -e "$resource" ]; then
+    base="$(basename "$resource")"
+    ditto "$resource" "${INSTALL_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/$base"
+  fi
+done < "$RESOURCES_TO_COPY"
+BASH
+        UI.puts "[post_install] Replaced install-time rsync bulk copy with ditto loop in #{File.basename(script_path)}"
+      end
+
+      # Replace finalize rsync if present
+      finalize_pattern = /rsync -av --chmod=u\+rw,g\+rw,o\+r --exclude ".DS_Store" "\$\{PODS_RESOURCES_STAGING_DIR\}\/" "\$\{TARGET_BUILD_DIR\}\/\$\{UNLOCALIZED_RESOURCES_FOLDER_PATH\}\/"/
+      if contents.match?(finalize_pattern)
+        contents = contents.gsub(finalize_pattern, 'ditto "${PODS_RESOURCES_STAGING_DIR}" "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"')
+        UI.puts "[post_install] Replaced finalize rsync with ditto in #{File.basename(script_path)}"
+      end
+
+      File.write(script_path, contents)
+    end
+
+    # Legacy single script patch
+    resources_script = File.join(__dir__, 'Pods', 'Target Support Files', 'Pods-rtastudio', 'Pods-rtastudio-resources.sh')
+    if File.exist?(resources_script)
+      contents = File.read(resources_script)
+      original_line = 'RESOURCES_TO_COPY=${PODS_ROOT}/resources-to-copy-${TARGETNAME}.txt'
+      patched_line  = 'RESOURCES_TO_COPY=${TARGET_TEMP_DIR}/resources-to-copy-${TARGETNAME}.txt'
+      if contents.include?(original_line) && !contents.include?(patched_line)
+        contents = contents.sub(original_line, patched_line)
+        File.write(resources_script, contents)
+        UI.puts "[post_install] Patched Pods-rtastudio-resources.sh to use TARGET_TEMP_DIR for RESOURCES_TO_COPY (legacy path)"
+      end
+    end
   end
 end
