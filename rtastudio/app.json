@@ -50,7 +50,8 @@
       }
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-router"
     ]
   },
   "web": {
