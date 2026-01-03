@@ -4,17 +4,19 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  FlatList, // Import FlatList for horizontal image display
+  FlatList,
+  Alert,
 } from "react-native";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import * as SecureStore from "expo-secure-store";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useColorScheme } from "nativewind";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text, View } from "@/components/Themed";
-import Toast from "react-native-toast-message";
+import { useTheme } from "@/lib/theme";
+import { supabase } from "@/lib/supabase";
+import { useData } from "@/lib/data-provider";
+import { useAuthUser } from "@/lib/auth-store";
 
 // Define the type for a single picked image
 type PickedImage = {
@@ -24,43 +26,25 @@ type PickedImage = {
 };
 
 export default function FeedbackForm() {
-  const { email: routeEmail, id: routeId } = useLocalSearchParams<{
-    email?: string;
-    id?: string;
-  }>();
   const router = useRouter();
-  const { colorScheme } = useColorScheme();
+  const { colorScheme } = useTheme();
   const insets = useSafeAreaInsets();
+  
+  // Use DataProvider and auth for user data - instant load!
+  const { userProfile } = useData();
+  const user = useAuthUser();
+  
+  const email = userProfile?.email || "";
+  const userId = user?.id || "";
 
-  const [email, setEmail] = useState<string>("");
-  const [userId, setUserId] = useState<string>("");
   const [subject, setSubject] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [images, setImages] = useState<PickedImage[]>([]); // Changed to an array
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  useEffect(() => {
-    if (routeEmail) setEmail(routeEmail);
-    if (routeId) setUserId(routeId);
-    else {
-      (async () => {
-        try {
-          const storedUser = await SecureStore.getItemAsync("usedData");
-          if (storedUser) {
-            const parsed = JSON.parse(storedUser);
-            if (parsed?.email) setEmail(parsed.email);
-            if (parsed?.id) setUserId(parsed.id);
-          }
-        } catch (error) {
-          console.error("Failed to load user data from SecureStore:", error);
-        }
-      })();
-    }
-  }, [routeEmail, routeId]);
-
   const handlePickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: 'images',
       quality: 0.7,
       allowsMultipleSelection: true, // Enable multiple selection
     });
@@ -75,23 +59,6 @@ export default function FeedbackForm() {
     }
   };
 
-  const showToast = (
-    type: "success" | "error" | "info",
-    text1: string,
-    text2?: string,
-    onHideCallback?: () => void
-  ) => {
-    Toast.show({
-      type: type,
-      text1: text1,
-      text2: text2,
-      position: "bottom",
-      bottomOffset: 120,
-      visibilityTime: 4000,
-      onHide: onHideCallback,
-    });
-  };
-
   const handleSubmit = async () => {
     if (
       !email.trim() ||
@@ -99,60 +66,91 @@ export default function FeedbackForm() {
       !description.trim() ||
       images.length === 0
     ) {
-      showToast(
-        "error",
-        "Required fields missing",
-        "All fields are required, including at least one image."
-      );
+      Alert.alert("Missing Information", "All fields are required, including at least one image.");
+      return;
+    }
+
+    if (!userId) {
+      Alert.alert("Error", "User ID not found. Please try logging in again.");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const formData = new FormData();
-      formData.append("email", email);
-      formData.append("id", userId);
-      formData.append("subject", subject);
-      formData.append("description", description);
+      // Upload first image to Supabase Storage (same pattern as web profile)
+      const firstImage = images[0];
+      const fileExt = firstImage.name.split('.').pop() || 'jpg';
+      const fileName = `feedback-${userId}-${Date.now()}.${fileExt}`;
+      const bucket = 'feedback-images';
+      
+      // Fix contentType - ensure it's a valid MIME type
+      const contentType = firstImage.type && firstImage.type.includes('/') 
+        ? firstImage.type 
+        : `image/${fileExt === 'png' ? 'png' : 'jpeg'}`;
 
-      // Loop through the images array to append each one to the form data
-      images.forEach((image, index) => {
-        formData.append(`image_${index}`, {
-          uri: image.uri,
-          name: image.name,
-          type: image.type,
-        } as any);
-      });
+      console.log('[Feedback] Uploading:', { fileName, contentType });
 
-      const response = await fetch(
-        "https://rta-server.onrender.com/api/feedback/userFeedback",
-        {
-          method: "POST",
-          body: formData,
-          headers: {},
-        }
-      );
-
-      if (response.ok) {
-        showToast(
-          "success",
-          "Feedback submitted!",
-          "Thank you for your feedback.",
-          () => router.replace("/profile")
-        );
-        setSubject("");
-        setDescription("");
-        setImages([]); // Clear the images array
-      } else {
-        const errorText = await response.text();
-        console.log("Server error response:", errorText);
-        throw new Error(errorText || "Submission failed");
+      // Fetch the image as a blob and convert to arrayBuffer (React Native requirement)
+      const response = await fetch(firstImage.uri);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status}`);
       }
+      const blob = await response.blob();
+      const arrayBuffer = await new Response(blob).arrayBuffer();
+
+      console.log('[Feedback] Image size:', arrayBuffer.byteLength, 'bytes');
+
+      // Upload to Supabase Storage with upsert: true (like web profile)
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, arrayBuffer, {
+          contentType,
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error('[Feedback] Upload error details:', uploadError);
+        throw uploadError;
+      }
+
+      console.log('[Feedback] Upload successful');
+
+      // Get public URL
+      const { data } = supabase.storage.from(bucket).getPublicUrl(fileName);
+      const imageUrl = data.publicUrl;
+
+      console.log('[Feedback] Public URL:', imageUrl);
+
+      // Insert feedback record
+      const { error: insertError } = await supabase
+        .from('feedback')
+        .insert({
+          email: email.trim(),
+          subject: subject.trim(),
+          description: description.trim(),
+          image: imageUrl,
+          account_id: userId,
+        });
+
+      if (insertError) {
+        console.error('[Feedback] Insert error:', insertError);
+        throw insertError;
+      }
+
+      console.log('[Feedback] Record inserted successfully');
+
+      Alert.alert("Success", "Your feedback has been submitted successfully!");
+      setSubject("");
+      setDescription("");
+      setImages([]);
+      router.replace("/(tabs)/profile");
     } catch (error: any) {
-      showToast(
-        "error",
-        "Submission failed",
-        error.message || "An unexpected error occurred."
+      console.error("[Feedback] Submission failed:", error);
+      
+      // Simple user-friendly error message
+      Alert.alert(
+        "Submission Failed", 
+        "Unable to submit feedback. Please check your internet connection and try again."
       );
     } finally {
       setIsSubmitting(false);
@@ -196,15 +194,9 @@ export default function FeedbackForm() {
           <Text className="text-base font-medium text-gray-800 dark:text-gray-200 mb-2">
             Email
           </Text>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            placeholder="your@email.com"
-            placeholderTextColor="#939393"
-            className="border-b border-placeholder pb-2 mb-4 text-black dark:text-white"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
+          <Text className="pb-2 mb-4 text-black dark:text-white">
+            {email || "Loading..."}
+          </Text>
 
           <Text className="text-base font-medium text-gray-800 dark:text-gray-200 mb-2">
             Subject

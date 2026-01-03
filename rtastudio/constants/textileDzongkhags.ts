@@ -1,30 +1,17 @@
 // textileDzongkhags.ts
 export const textileDzongkhags = {
   BTGA: require("../assets/textiles/Hortha_Jalo.png"),
-  BT33: require("../assets/textiles/Yathra.jpg"),
+  BT33: require("../assets/textiles/mathra.jpg"),
   BT32: require("../assets/textiles/Yathra.jpg"),
-  BT24: require("../assets/textiles/Adha_Mathra.jpg"),
+  BT24: require("../assets/textiles/lungerserma.jpg"),
   BT44: require("../assets/textiles/Kushuthara.png"),
   BT34: require("../assets/textiles/Nettle_Bura.jpg"),
   BT42: require("../assets/textiles/Sethra.jpg"),
   BT43: require("../assets/textiles/Pangtsi.jpg"),
   BT41: require("../assets/textiles/Dromchuchema.jpg"),
-  BT45: require("../assets/textiles/Kera.jpg"),
+  BT45: require("../assets/textiles/kera.png"),
   BT23: require("../assets/textiles/Hortha_Jalo.png"),
 };
-
-// export const textileDzongkhags = {
-//   BTGA: require("../assets/textiles/Kushuthara.png"),
-//   BT24: require("../assets/textiles/Kushuthara.png"),
-//   BT32: require("../assets/textiles/Kushuthara.png"),
-//   BT33: require("../assets/textiles/Kushuthara.png"),
-//   BT44: require("../assets/textiles/Kushuthara.png"),
-//   BT34: require("../assets/textiles/Kushuthara.png"),
-//   BT42: require("../assets/textiles/Sethra.jpg"),
-//   BT43: require("../assets/textiles/Kushuthara.png"),
-//   BT41: require("../assets/textiles/Kushuthara.png"),
-//   BT45: require("../assets/textiles/Kushuthara.png"),
-// };
 
 // Extracted path data from SvgComponent.tsx
 export const dzongkhagPaths = {

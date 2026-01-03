@@ -2,7 +2,8 @@ import React, { memo } from "react";
 import { TouchableOpacity, Dimensions } from "react-native";
 import { Image } from "expo-image";
 import { Text, View } from "@/components/Themed";
-import { getStableColorForId } from "@/utils/color";
+import { getStableColorForId, getGradientColorsForId } from "@/utils/color";
+import { LinearGradient } from "expo-linear-gradient";
 
 type Language = "ENG" | "DZO";
 
@@ -39,6 +40,20 @@ const trimWords = (text: string, maxWords = 6) => {
     : words.slice(0, maxWords).join(" ") + "...";
 };
 
+// Helper: split duration into numbers and text
+const splitDuration = (duration: string): { numbers: string; text: string } => {
+  const match = duration.match(/^([\d\-]+)\s+(.+)$/);
+  if (match) {
+    return { numbers: match[1], text: match[2] };
+  }
+  return { numbers: duration, text: "" };
+};
+
+// Helper: remove leading numbers from textile name (e.g., "4. kushuthara" -> "kushuthara")
+const cleanTextileName = (name: string): string => {
+  return name.replace(/^\d+\.\s*/, "");
+};
+
 // Labels dictionary
 const labels = {
   ENG: {
@@ -58,8 +73,9 @@ const labels = {
 const TextileListItem = memo(
   ({ item, onPress, language }: TextileListItemProps) => {
     const screenWidth = Dimensions.get("window").width;
-    const durationBgColor = getStableColorForId(item.id + "-duration");
-    const textileNameBgColor = getStableColorForId(item.id + "-name");
+    const gradientColors = getGradientColorsForId(item.id + "-name");
+    const durationGradientColors: [string, string] = ["#000C40", "#787F98"];
+    const { numbers: durationNumbers, text: durationText } = splitDuration(item.duration);
 
     // Classes for Dzongkha readability
     const dzongkhaItemTextClass =
@@ -73,73 +89,67 @@ const TextileListItem = memo(
 
     return (
       <TouchableOpacity onPress={onPress}>
-        <View
-          style={{
-            width: screenWidth - 32,
-            borderRadius: 12,
-            padding: 8,
-            marginBottom: 16,
-            alignSelf: "center",
-            overflow: "hidden",
-          }}
-        >
+        <View className="w-full rounded-xl p-2 mb-4 overflow-hidden" style={{ width: screenWidth - 32, alignSelf: "center" }}>
           {/* ROW 1 */}
-          <View style={{ flexDirection: "row", height: 220 }}>
+          <View className="flex-row" style={{ height: 220 }}>
             {/* Column 1 */}
-            <View style={{ flex: 2, marginRight: 8 }}>
+            <View className="flex-2 mr-2" style={{ flex: 2, marginRight: 8 }}>
               {/* Duration + Textile Name */}
-              <View style={{ flex: 1, flexDirection: "row", marginBottom: 4 }}>
-                <View
+              <View className="flex-row mb-1" style={{ flex: 1, flexDirection: "row", marginBottom: 4 }}>
+                <LinearGradient
+                  colors={durationGradientColors}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
                   style={{
                     flex: 1,
-                    justifyContent: "center",
-                    backgroundColor: durationBgColor,
+                    justifyContent: "space-between",
+                    alignItems: "center",
                     borderRadius: 8,
+                    paddingVertical: 6,
                   }}
                 >
                   <Text
-                    className={`text-xs text-center ${dzongkhaItemTextClass}`}
-                    style={{ color: "white" }}
+                    className="text-xs" lightColor="#fff" darkColor="#fff"
                   >
-                    {item.duration}
+                    Duration
                   </Text>
-                </View>
+                  <Text
+                    className="text-lg font-bold" lightColor="#fff" darkColor="#fff"
+                  >
+                    {durationNumbers}
+                  </Text>
+                  {durationText && (
+                    <Text
+                      className="text-xs" lightColor="#fff" darkColor="#fff"
+                    >
+                      {durationText}
+                    </Text>
+                  )}
+                </LinearGradient>
 
-                <View
+                <LinearGradient
+                  colors={gradientColors}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
                   style={{
                     flex: 2,
                     marginLeft: 4,
                     borderRadius: 8,
                     overflow: "hidden",
-                    position: "relative",
                     justifyContent: "center",
                     alignItems: "center",
                   }}
                 >
-                  <View
-                    style={{
-                      position: "absolute",
-                      width: "100%",
-                      height: "100%",
-                      backgroundColor: textileNameBgColor,
-                      borderRadius: 8,
-                    }}
-                  />
                   <Text
-                    className={`font-sm ${dzongkhaItemNameClass}`}
-                    style={{
-                      color: "white",
-                      textAlign: "center",
-                      fontWeight: "bold",
-                    }}
+                    className={`text-center font-bold ${dzongkhaItemNameClass}`} lightColor="#fff" darkColor="#fff"
                   >
-                    {item.textileName}
+                    {cleanTextileName(item.textileName)}
                   </Text>
-                </View>
+                </LinearGradient>
               </View>
 
               {/* Origin Image + Main Image */}
-              <View style={{ flex: 2, flexDirection: "row" }}>
+              <View className="flex-row" style={{ flex: 2, flexDirection: "row" }}>
                 <View
                   style={{
                     flex: 1,
@@ -171,6 +181,7 @@ const TextileListItem = memo(
                     style={{
                       position: "absolute",
                       bottom: 6,
+                      alignSelf: "center",
                       backgroundColor: "rgba(0,0,0,0.5)",
                       paddingHorizontal: 6,
                       paddingVertical: 2,
@@ -178,12 +189,7 @@ const TextileListItem = memo(
                     }}
                   >
                     <Text
-                      className={`text-center ${dzongkhaSmallItemTextClass}`}
-                      style={{
-                        color: "white",
-                        fontWeight: "bold",
-                        fontSize: 10,
-                      }}
+                      className={`text-center font-bold text-xs ${dzongkhaSmallItemTextClass}`} lightColor="#fff" darkColor="#fff"
                     >
                       {labels[language].origin}
                     </Text>
@@ -240,6 +246,7 @@ const TextileListItem = memo(
                 style={{
                   position: "absolute",
                   top: 6,
+                  alignSelf: "center",
                   backgroundColor: "rgba(0,0,0,0.5)",
                   paddingHorizontal: 6,
                   paddingVertical: 2,
@@ -247,19 +254,13 @@ const TextileListItem = memo(
                 }}
               >
                 <Text
-                  className={`text-center ${dzongkhaSmallItemTextClass}`}
-                  style={{
-                    color: "white",
-                    fontWeight: "bold",
-                    fontSize: 10,
-                  }}
+                  className={`text-center font-bold text-xs ${dzongkhaSmallItemTextClass}`} lightColor="#fff" darkColor="#fff"
                 >
                   {labels[language].weaving}
                 </Text>
               </View>
               <Text
-                className={`absolute bottom-6 ${dzongkhaItemTextClass}`}
-                style={{ color: "white" }}
+                className={`absolute bottom-6 ${dzongkhaItemTextClass}`} lightColor="#fff" darkColor="#fff"
               >
                 {item.weavingTechniqueText}
               </Text>
@@ -268,6 +269,7 @@ const TextileListItem = memo(
 
           {/* ROW 2 */}
           <View
+            className="flex-row justify-between mt-2"
             style={{
               flexDirection: "row",
               justifyContent: "space-between",
@@ -302,6 +304,7 @@ const TextileListItem = memo(
                 style={{
                   position: "absolute",
                   bottom: 6,
+                  alignSelf: "center",
                   backgroundColor: "rgba(0,0,0,0.5)",
                   paddingHorizontal: 6,
                   paddingVertical: 2,
@@ -309,12 +312,7 @@ const TextileListItem = memo(
                 }}
               >
                 <Text
-                  className={`text-center ${dzongkhaSmallItemTextClass}`}
-                  style={{
-                    color: "white",
-                    fontWeight: "bold",
-                    fontSize: 10,
-                  }}
+                  className={`text-center font-bold text-xs ${dzongkhaSmallItemTextClass}`} lightColor="#fff" darkColor="#fff"
                 >
                   {labels[language].motifs}
                 </Text>
@@ -347,6 +345,7 @@ const TextileListItem = memo(
                 style={{
                   position: "absolute",
                   bottom: 6,
+                  alignSelf: "center",
                   backgroundColor: "rgba(0,0,0,0.5)",
                   paddingHorizontal: 6,
                   paddingVertical: 2,
@@ -354,19 +353,13 @@ const TextileListItem = memo(
                 }}
               >
                 <Text
-                  className={`text-center ${dzongkhaSmallItemTextClass}`}
-                  style={{
-                    color: "white",
-                    fontWeight: "bold",
-                    fontSize: 10,
-                  }}
+                  className={`text-center font-bold text-xs ${dzongkhaSmallItemTextClass}`} lightColor="#fff" darkColor="#fff"
                 >
                   {labels[language].symbolism}
                 </Text>
               </View>
               <Text
-                className={`absolute top-6 ${dzongkhaItemTextClass}`}
-                style={{ color: "white" }}
+                className={`absolute top-6 text-center px-1 ${dzongkhaItemTextClass}`} lightColor="#fff" darkColor="#fff"
               >
                 {trimWords(item.symbolismText)}
               </Text>

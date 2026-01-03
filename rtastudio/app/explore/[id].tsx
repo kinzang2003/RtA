@@ -13,8 +13,9 @@ import { router, useLocalSearchParams } from "expo-router";
 import { FontAwesome } from "@expo/vector-icons";
 import { Text, View } from "@/components/Themed";
 import { LinearGradient } from "expo-linear-gradient";
-import { useColorScheme } from "nativewind";
+import { useTheme } from "@/lib/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useData } from "@/lib/data-provider";
 
 const { width } = Dimensions.get("window");
 
@@ -67,7 +68,6 @@ export default function TextileDetailScreen() {
   const { id, textile: textileParam, language } = useLocalSearchParams();
   const currentLanguage = (language as "ENG" | "DZO") || "ENG";
   const [textile, setTextile] = useState<TextileFormData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
   const [expandedSections, setExpandedSections] = useState<{
@@ -78,7 +78,10 @@ export default function TextileDetailScreen() {
     motifs: false,
     processes: false,
   });
-  const { colorScheme } = useColorScheme();
+  const { colorScheme } = useTheme();
+  
+  // Use DataProvider textiles - loads instantly from cache!
+  const { textiles, isLoadingTextiles } = useData();
 
   const toggleSection = (section: string) => {
     setExpandedSections((prev) => ({
@@ -88,39 +91,29 @@ export default function TextileDetailScreen() {
   };
 
   useEffect(() => {
-    const initialize = async () => {
+    const initialize = () => {
       if (textileParam) {
         try {
           const parsed: TextileFormData = JSON.parse(textileParam as string);
           setTextile(parsed);
-          setLoading(false);
           return;
         } catch (err) {
           setError("Failed to parse textile data");
-          setLoading(false);
           return;
         }
       }
 
-      try {
-        const response = await fetch(
-          `https://rta-server.onrender.com/api/textile/${id}`
-        );
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const [data]: TextileFormData[] = await response.json();
-        setTextile(data);
-        setLoading(false);
-      } catch (err) {
-        console.error("Failed to fetch textile data:", err);
-        setError("Failed to fetch textile data");
-        setLoading(false);
+      // Find textile from cached data
+      const foundTextile = textiles.find(t => t.id === id);
+      if (foundTextile) {
+        setTextile(foundTextile as unknown as TextileFormData);
+      } else if (!isLoadingTextiles) {
+        setError("Textile not found");
       }
     };
 
     initialize();
-  }, [id, textileParam]);
+  }, [id, textileParam, textiles, isLoadingTextiles]);
 
   const tagsStyles = useMemo(
     () => ({
@@ -133,7 +126,7 @@ export default function TextileDetailScreen() {
     [colorScheme]
   );
 
-  if (loading)
+  if (isLoadingTextiles || (!textile && !error))
     return (
       <View className="flex-1 justify-center items-center">
         <ActivityIndicator
@@ -271,7 +264,7 @@ function SectionHeader({
   expanded?: boolean;
   toggleSection: (section: string) => void;
 }) {
-  const { colorScheme } = useColorScheme();
+  const { colorScheme } = useTheme();
   return (
     <TouchableOpacity
       onPress={() => toggleSection(section)}
@@ -292,7 +285,7 @@ function GlassDescriptionContainer({
 }: {
   children: React.ReactNode;
 }) {
-  const { colorScheme } = useColorScheme();
+  const { colorScheme } = useTheme();
 
   const borderColor =
     colorScheme === "dark"

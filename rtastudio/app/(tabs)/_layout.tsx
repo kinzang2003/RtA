@@ -1,38 +1,49 @@
-// app/(tabs)/_layout.tsx
 import { Tabs } from "expo-router";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useColorScheme } from "nativewind";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "@/lib/theme";
 
 export default function TabLayout() {
-  const { colorScheme } = useColorScheme();
+  const { colorScheme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const isDark = colorScheme === "dark";
 
   return (
     <Tabs
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarShowLabel: true,
-        tabBarStyle: {
-          borderTopWidth: 0,
-          elevation: 0,
-          backgroundColor: colorScheme === "dark" ? "#111" : "#fff",
-        },
-        tabBarIcon: ({ color, focused }) => {
-          let iconName: keyof typeof Ionicons.glyphMap = "ellipse";
+        tabBarActiveTintColor: "#b91c1c",
+        tabBarInactiveTintColor: isDark ? "#999" : "#555",
 
-          if (route.name === "index") {
-            iconName = focused ? "time" : "time-outline"; // Recents
-          } else if (route.name === "search") {
-            iconName = focused ? "search" : "search-outline"; // Search
-          } else if (route.name === "explore") {
-            iconName = focused ? "compass" : "compass-outline"; // Explore
-          } else if (route.name === "profile") {
-            iconName = focused ? "person" : "person-outline"; // Profile
+        tabBarStyle: {
+          backgroundColor: isDark ? "#0d0d0d" : "#ffffff",
+          height: 60 + insets.bottom,
+          paddingBottom: insets.bottom,
+          borderTopWidth: 0,
+        },
+
+        tabBarIcon: ({ color, focused }) => {
+          let iconName: keyof typeof Ionicons.glyphMap;
+
+          switch (route.name) {
+            case "index":
+              iconName = focused ? "time" : "time-outline";
+              break;
+            case "search":
+              iconName = focused ? "search" : "search-outline";
+              break;
+            case "explore":
+              iconName = focused ? "compass" : "compass-outline";
+              break;
+            case "profile":
+              iconName = focused ? "person" : "person-outline";
+              break;
+            default:
+              iconName = "ellipse-outline";
           }
 
           return <Ionicons name={iconName} size={24} color={color} />;
         },
-        tabBarActiveTintColor: "#b91c1c", // red-700
-        tabBarInactiveTintColor: colorScheme === "dark" ? "#aaa" : "#444",
       })}
     >
       <Tabs.Screen name="index" options={{ title: "Recents" }} />

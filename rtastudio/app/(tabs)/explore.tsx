@@ -10,54 +10,24 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text, View } from "@/components/Themed";
-import { useColorScheme } from "nativewind";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useData } from "@/lib/data-provider";
+import { useTheme } from "@/lib/theme";
 
 import TextileListItem from "@/components/TextileListItem";
 import BhutanMap from "@/components/BhutanMap";
 
 type Language = "ENG" | "DZO";
 
-interface Textile {
-  id: string;
-  textileName: string;
-  origin: string;
-  duration: string;
-  description: string;
-  weavingProcesses: string;
-  dateAdded: string;
-  status: string;
-  image: string;
-  motifImage: string;
-  symbolismImage: string;
-  originImage: string;
-  weavingTechniqueImage: string;
-  symbolismText: string;
-  weavingTechniqueText: string;
-  type?: "ENG" | "DZO";
-}
-
 export default function ExploreScreen() {
   const router = useRouter();
-  const [textiles, setTextiles] = useState<Textile[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
   const [isMapView, setIsMapView] = useState(false);
   const [currentLanguage, setCurrentLanguage] = useState<Language>("ENG");
-  const { colorScheme } = useColorScheme();
+  const { colorScheme } = useTheme();
   const insets = useSafeAreaInsets();
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetch("https://rta-server.onrender.com/api/textile")
-      .then((res) => res.json())
-      .then((data: Textile[]) => {
-        setTextiles(data);
-        setRefreshing(false);
-      })
-      .catch(() => setRefreshing(false));
-  };
+  
+  // Use global textiles data - loads instantly!
+  const { textiles, isLoadingTextiles, refreshTextiles } = useData();
 
   const filteredTextiles = textiles.filter(
     (item) =>
@@ -65,25 +35,6 @@ export default function ExploreScreen() {
         item.origin.toLowerCase().includes(searchQuery.toLowerCase())) &&
       (currentLanguage === "ENG" ? item.type !== "DZO" : item.type === "DZO")
   );
-
-  useEffect(() => {
-    const loadData = async () => {
-      const cached = await AsyncStorage.getItem("textiles");
-      if (cached) {
-        setTextiles(JSON.parse(cached));
-        setLoading(false);
-      }
-      fetch("https://rta-server.onrender.com/api/textile")
-        .then((res) => res.json())
-        .then((data: Textile[]) => {
-          setTextiles(data);
-          AsyncStorage.setItem("textiles", JSON.stringify(data));
-        })
-        .catch(() => {});
-    };
-
-    loadData();
-  }, []);
 
   const toggleLanguage = () => {
     setCurrentLanguage((prev) => (prev === "ENG" ? "DZO" : "ENG"));
@@ -174,7 +125,7 @@ export default function ExploreScreen() {
         />
       )}
 
-      {loading ? (
+      {isLoadingTextiles ? (
         <View className="flex-1 justify-center items-center">
           <ActivityIndicator
             size="large"
@@ -187,8 +138,8 @@ export default function ExploreScreen() {
         </View>
       ) : (
         <FlatList
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
+          refreshing={isLoadingTextiles}
+          onRefresh={refreshTextiles}
           data={filteredTextiles}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (

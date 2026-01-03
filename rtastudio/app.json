@@ -13,7 +13,9 @@
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff",
-      "permissions": ["READ_MEDIA_IMAGES"]
+      "permissions": [
+        "READ_MEDIA_IMAGES"
+      ]
     },
     "ios": {
       "supportsTablet": true,
@@ -21,10 +23,9 @@
       "infoPlist": {
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["rtastudio-app"]
-          },
-          {
-            "CFBundleURLSchemes": ["rtastudio-app"]
+            "CFBundleURLSchemes": [
+              "rtastudio-app"
+            ]
           }
         ],
         "ITSAppUsesNonExemptEncryption": false
@@ -47,12 +48,10 @@
       "eas": {
         "projectId": "5b876950-83fa-4983-8b40-77e9d4f210bc"
       }
-    }
-  },
-  "extra": {
-    "eas": {
-      "projectId": "5b876950-83fa-4983-8b40-77e9d4f210bc"
-    }
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
   },
   "web": {
     "bundler": "metro",

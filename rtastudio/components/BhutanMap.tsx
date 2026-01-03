@@ -7,7 +7,7 @@ import Svg, {
   Pattern,
   Image as SvgImage,
 } from "react-native-svg";
-import { useColorScheme } from "nativewind"; // Import useColorScheme
+import { useTheme } from "@/lib/theme";
 import {
   textileDzongkhags,
   dzongkhagPaths,
@@ -15,7 +15,7 @@ import {
 } from "@/constants/textileDzongkhags";
 
 export default function BhutanMap() {
-  const { colorScheme } = useColorScheme(); // Get current color scheme
+  const { colorScheme } = useTheme();
   const screenWidth = Dimensions.get("window").width;
   const screenHeight = Dimensions.get("window").height;
   const [selected, setSelected] = React.useState<string | null>(null);

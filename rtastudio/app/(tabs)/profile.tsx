@@ -1,69 +1,96 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   TouchableOpacity,
   ScrollView,
   Modal,
   Pressable,
   ActivityIndicator,
+  Image,
+  Alert,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { router } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import Feather from "@expo/vector-icons/Feather";
 import { Text, View } from "@/components/Themed";
-import { useColorScheme } from "nativewind";
-import { supabase } from "@/supabase";
+import Feather from "@expo/vector-icons/Feather";
+import { supabase } from "@/lib/supabase";
+import { useAuthUser } from "@/lib/auth-store";
+import { clearSession } from "@/auth/index";
+import { clearAllCache } from "@/lib/api";
+import { useTheme } from "@/lib/theme";
+import { useData } from "@/lib/data-provider";
 
 export default function Profile() {
-  const [profile, setProfile] = useState<any>(null);
-  const [sessions, setSessions] = useState<any[]>([]);
+  const user = useAuthUser();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const { colorScheme } = useColorScheme();
+  const [showThemeModal, setShowThemeModal] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
+  const router = useRouter();
+  const { themeMode, setTheme, colorScheme } = useTheme();
   const insets = useSafeAreaInsets();
-
-  useEffect(() => {
-    const loadProfile = async () => {
-      const stored = await AsyncStorage.getItem("userProfile");
-      if (stored) setProfile(JSON.parse(stored));
-
-      setSessions([
-        { deviceName: "iPhone 14 Pro", ipAddress: "192.168.1.5" },
-        { deviceName: "Chrome on MacBook", ipAddress: "192.168.1.10" },
-        { deviceName: "Android Device", ipAddress: "192.168.1.15" },
-      ]);
-    };
-    loadProfile();
-  }, []);
+  
+  // Use global data - loads instantly!
+  const { userProfile: profile } = useData();
 
   const logout = async () => {
     try {
-      // All the keys you used in LoginScreen
-      const keys = [
-        "supabaseSession",
-        "authToken",
-        "userProfile",
-        "ownedProjects",
-        "invitedProjects",
-        "projectIds",
-      ];
-
-      // Clear them in parallel
-      await AsyncStorage.multiRemove(keys);
-
-      // Optional: sign out from Supabase server-side
+      setLogoutLoading(true);
+      
+      // Sign out at Supabase backend to invalidate JWT tokens
       await supabase.auth.signOut();
 
-      // Navigate back to login
-      router.replace("/login");
-    } catch (err) {
-      console.error("Logout error:", err);
+      // Clear the app-side stored session and all cache
+      await clearSession();
+      await clearAllCache();
+      
+      // DataProvider will clear profile automatically on user change
+
+      // Navigate to welcome/login screen
+      router.replace("/");
+    } catch (e) {
+      console.error("Logout failed:", e);
+      // Even if logout fails, navigate away for security
+      router.replace("/");
+    } finally {
+      setLogoutLoading(false);
     }
   };
 
-  const confirmDelete = () => {
-    console.log("Deleting account...");
-    setShowDeleteModal(false);
-    logout();
+  const handleThemeChange = async (theme: "light" | "dark" | "system") => {
+    await setTheme(theme);
+    setShowThemeModal(false);
+  };
+
+  const confirmDelete = async () => {
+    try {
+      // Request account deletion - sets deletion_requested_at timestamp
+      // Scheduled for 30 days from now per Supabase best practice
+      const thirtyDaysFromNow = new Date();
+      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          deletion_requested_at: new Date().toISOString(),
+          deletion_scheduled_for: thirtyDaysFromNow.toISOString(),
+        })
+        .eq("id", user?.id);
+
+      if (error) {
+        console.error("Delete request failed:", error);
+        Alert.alert(
+          "Deletion Request Failed",
+          "We couldn't process your request. Please try again."
+        );
+        return;
+      }
+
+      // Now log out and redirect
+      setShowDeleteModal(false);
+      await logout();
+    } catch (error) {
+      console.error("Delete account error:", error);
+      Alert.alert("Error", "An unexpected error occurred. Please try again.");
+    }
   };
 
   if (!profile) {
@@ -71,7 +98,7 @@ export default function Profile() {
       <View className="flex-1 justify-center items-center bg-white dark:bg-black">
         <ActivityIndicator
           size="large"
-          color={colorScheme === "dark" ? "white" : "black"}
+          color={colorScheme === "dark" ? "#fff" : "#000"}
         />
         <Text className="mt-4 text-gray-700 dark:text-gray-300">
           Loading profile...
@@ -80,163 +107,237 @@ export default function Profile() {
     );
   }
 
+  const themeOptions = [
+    { value: "light", label: "Light", icon: "sun" },
+    { value: "dark", label: "Dark", icon: "moon" },
+    { value: "system", label: "System", icon: "smartphone" },
+  ] as const;
+
   return (
     <View className="flex-1">
       <ScrollView
         className="flex-1 px-6"
         style={{ paddingTop: insets.top + 24 }}
       >
-        <Text className="text-3xl font-semibold text-black dark:text-white">
+        <Text className="text-3xl font-semibold mb-6">
           Profile
         </Text>
 
-        <View className="mb-6 p-4 rounded-lg">
+        {/* Profile Card */}
+        <View className="mb-6 p-4 rounded-xl border border-neutral-200 dark:border-white/10">
           <View className="flex-row items-center mb-4">
-            <View className="w-16 h-16 rounded-full mr-3 justify-center items-center">
-              <Feather
-                name="user"
-                size={32}
-                color={colorScheme === "dark" ? "#fff" : "#000"}
-              />
+            <View className="w-16 h-16 rounded-full mr-3 justify-center items-center overflow-hidden">
+              {profile.avatar_url ? (
+                <Image
+                  source={{ uri: profile.avatar_url }}
+                  className="w-16 h-16"
+                  resizeMode="cover"
+                />
+              ) : (
+                <Feather
+                  name="user"
+                  size={32}
+                  color={colorScheme === "dark" ? "#fff" : "#000"}
+                />
+              )}
             </View>
             <View className="flex-1">
-              <Text className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+              <Text className="text-sm mb-1" lightColor="#6B7280" darkColor="#9CA3AF">
                 Full Name
               </Text>
-              <Text className="text-base text-black dark:text-white">
-                {profile.full_name}
+              <Text className="text-base font-semibold">
+                {profile.full_name || "N/A"}
               </Text>
             </View>
           </View>
 
           <View className="mb-3">
-            <Text className="text-sm mb-1">Email</Text>
-            <Text className="text-base text-black dark:text-white">
+            <Text className="text-sm mb-1" lightColor="#6B7280" darkColor="#9CA3AF">
+              Email
+            </Text>
+            <Text className="text-base">
               {profile.email}
             </Text>
           </View>
+        </View>
 
-          <TouchableOpacity className="flex-row items-center mt-2 bg-transparent">
-            <Text className="text-sm text-gray-500 dark:text-gray-400">
-              Forgot password?{" "}
-            </Text>
-            <Text className="text-red-500 dark:text-red-300 underline">
-              reset
-            </Text>
+        {/* Settings Section */}
+        <View className="mb-6">
+          <Text className="text-lg font-semibold mb-3">
+            Settings
+          </Text>
+
+          {/* Theme Selector */}
+          <TouchableOpacity
+            className="flex-row items-center justify-between p-4 mb-3 rounded-xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800"
+            onPress={() => setShowThemeModal(true)}
+          >
+            <View className="flex-row items-center" lightColor="transparent" darkColor="transparent">
+              <Feather
+                name={themeMode === "light" ? "sun" : themeMode === "dark" ? "moon" : "smartphone"}
+                size={20}
+                color={colorScheme === "dark" ? "#fff" : "#000"}
+              />
+              <Text className="ml-3 text-base">
+                Theme
+              </Text>
+            </View>
+            <View className="flex-row items-center" lightColor="transparent" darkColor="transparent">
+              <Text className="text-sm mr-2 capitalize" lightColor="#6B7280" darkColor="#9CA3AF">
+                {themeMode}
+              </Text>
+              <Feather name="chevron-right" size={18} color="#9CA3AF"/>
+            </View>
+          </TouchableOpacity>
+
+          {/* Password Reset */}
+          <TouchableOpacity
+            className="flex-row items-center justify-between p-4 mb-3 rounded-xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800"
+            onPress={() => router.push("/security")}
+          >
+            <View className="flex-row items-center" lightColor="transparent" darkColor="transparent">
+              <Feather
+                name="lock"
+                size={20}
+                color={colorScheme === "dark" ? "#fff" : "#000"}
+              />
+              <Text className="ml-3 text-base">
+                Password & Security
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          {/* Feedback */}
+          <TouchableOpacity
+            className="flex-row items-center justify-between p-4 rounded-xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800"
+            onPress={() => router.push("/feedback")}
+          >
+            <View className="flex-row items-center" lightColor="transparent" darkColor="transparent">
+              <Feather
+                name="message-circle"
+                size={20}
+                color={colorScheme === "dark" ? "#fff" : "#000"}
+              />
+              <Text className="ml-3 text-base">
+                Send Feedback
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color="#9CA3AF" />
           </TouchableOpacity>
         </View>
 
-        {/* Signed In Devices Section */}
-        <View className="mb-6 p-4 rounded-lg bg-white dark:bg-gray-800">
-          <View className="flex-row justify-between items-center mb-4 bg-transparent">
-            <Text className="text-lg font-semibold text-black dark:text-white">
-              Signed In Devices
-            </Text>
-            <TouchableOpacity
-              onPress={logout}
-              className="bg-gray-200 dark:bg-placeholder p-2 rounded"
-            >
-              <Text className="text-blue-500 dark:text-blue-300 text-sm">
-                Sign Out of All...
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {sessions.map((device, index) => (
-            <View
-              key={index}
-              className="flex-row justify-between items-center mb-4 bg-transparent"
-            >
-              <View className="flex-1 bg-transparent">
-                <View className="flex-row items-center mb-1 bg-transparent">
-                  <View
-                    className={`w-2 h-2 rounded-full mr-2 ${
-                      index === 0
-                        ? "bg-green-500"
-                        : "bg-gray-400 dark:bg-gray-500"
-                    }`}
-                  />
-                  <Text className="text-base text-black dark:text-white">
-                    {device.deviceName}
-                  </Text>
-                </View>
-                <Text className="text-sm text-gray-500 dark:text-gray-400">
-                  {device.ipAddress}
-                </Text>
-              </View>
-              <TouchableOpacity
-                className="py-2 px-4 rounded-md bg-gray-200 dark:bg-placeholder"
-                onPress={logout}
-              >
-                <Text className="text-sm text-black dark:text-white">
-                  Sign out
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
-
-        {/* Action Buttons Section */}
-        <View className="p-4 pb-32 bg-transparent">
+        {/* Actions Section */}
+        <View className="mb-6">
           <TouchableOpacity
-            className="bg-red-200 dark:bg-red-700 border border-red-500  p-4 rounded-lg items-center mb-6"
+            className="bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 p-4 rounded-xl items-center mb-4"
+            onPress={logout}
+            disabled={logoutLoading}
+          >
+            {logoutLoading ? (
+              <ActivityIndicator size="small" color={colorScheme === "dark" ? "#fff" : "#000"} />
+            ) : (
+              <Text className="font-semibold">
+                Sign Out
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 p-4 rounded-xl items-center"
             onPress={() => setShowDeleteModal(true)}
           >
-            <Text lightColor="#ef4444" className="font-semibold">
-              Delete Account
+            <Text className="font-semibold" lightColor="#dc2626" darkColor="#f87171">
+              Deactivate Account
             </Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            className="bg-gray-200 dark:bg-placeholder border border-gray-900 dark:border-gray-300 p-4 rounded-lg items-center"
-            onPress={() =>
-              router.push({
-                pathname: "/feedback",
-                params: { email: profile?.email, id: profile?.id },
-              })
-            }
-          >
-            <Text className="font-semibold">Provide Feedback</Text>
-          </TouchableOpacity>
         </View>
+
+        <View className="pb-32" />
       </ScrollView>
 
-      {/* Delete Account Confirmation Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={showDeleteModal}
-        onRequestClose={() => setShowDeleteModal(false)}
-      >
+      {/* Theme Selection Modal */}
+      <Modal animationType="fade" transparent visible={showThemeModal}>
+        <Pressable
+          className="flex-1 bg-black/50 justify-center items-center"
+          onPress={() => setShowThemeModal(false)}
+        >
+          <Pressable className="p-6 rounded-2xl mx-4 w-[90%] max-w-sm bg-white dark:bg-neutral-900">
+            <Text className="text-xl font-bold text-center mb-6">
+              Choose Theme
+            </Text>
+
+            {themeOptions.map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                className={`flex-row items-center justify-between p-4 mb-3 rounded-lg ${
+                  themeMode === option.value
+                    ? "bg-blue-50 dark:bg-blue-900/30 border-2 border-blue-500"
+                    : "bg-neutral-50 dark:bg-neutral-800"
+                }`}
+                onPress={() => handleThemeChange(option.value)}
+              >
+                <View className="flex-row items-center" lightColor="transparent" darkColor="transparent">
+                  <Feather
+                    name={option.icon}
+                    size={20}
+                    color={themeMode === option.value ? "#3B82F6" : (colorScheme === "dark" ? "#fff" : "#000")}
+                  />
+                  <Text
+                    className="ml-3 text-base"
+                    lightColor={themeMode === option.value ? "#2563eb" : "#000"}
+                    darkColor={themeMode === option.value ? "#60a5fa" : "#fff"}
+                  >
+                    {option.label}
+                  </Text>
+                </View>
+                {themeMode === option.value && (
+                  <Feather name="check" size={20} color="#3B82F6" />
+                )}
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity
+              className="mt-4 p-4 bg-neutral-100 dark:bg-neutral-800 rounded-lg"
+              onPress={() => setShowThemeModal(false)}
+            >
+              <Text className="text-center font-semibold text-black dark:text-white">
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal animationType="fade" transparent visible={showDeleteModal}>
         <Pressable
           className="flex-1 bg-black/50 justify-center items-center"
           onPress={() => setShowDeleteModal(false)}
         >
-          <Pressable className="p-6 rounded-2xl mx-4 w-[90%] max-w-sm bg-white dark:bg-[#1F1F1F]">
+          <Pressable className="p-6 rounded-2xl mx-4 w-[90%] max-w-sm bg-white dark:bg-neutral-900">
             <Text className="text-xl font-bold text-center mb-4">
-              Delete Account?
+              Deactivate Account?
             </Text>
-            <Text className="text-center mb-6">
-              Are you sure you want to delete your account? This action cannot
-              be undone.
+            <Text className="text-center text-sm mb-4" lightColor="#6B7280" darkColor="#9CA3AF">
+              Your account will be scheduled for permanent deletion in 30 days.{"\n\n"}
+              You can cancel this at any time by simply logging back in before the 30 days are up.{"\n\n"}
+              After 30 days, your account and all associated data will be permanently deleted.
             </Text>
-            <View
-              className="flex-row space-x-3"
-              lightColor="background: transparent"
-              darkColor="background: transparent"
-            >
+
+            <View className="flex-row space-x-3">
               <TouchableOpacity
-                className="flex-1 p-4 bg-gray-100 dark:bg-[#2C2C2C] rounded-lg"
+                className="flex-1 p-4 bg-neutral-100 dark:bg-neutral-800 rounded-lg"
                 onPress={() => setShowDeleteModal(false)}
               >
                 <Text className="text-center font-semibold">Cancel</Text>
               </TouchableOpacity>
+
               <TouchableOpacity
                 className="flex-1 bg-red-500 dark:bg-red-700 p-4 rounded-lg"
                 onPress={confirmDelete}
               >
-                <Text className="text-center font-semibold" lightColor="#fff">
-                  Delete
+                <Text className="text-center font-semibold text-white">
+                  Deactivate
                 </Text>
               </TouchableOpacity>
             </View>
