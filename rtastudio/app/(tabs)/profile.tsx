@@ -93,7 +93,7 @@ export default function Profile() {
     }
   };
 
-  if (!profile) {
+  if (loadingProfile) {
     return (
       <View className="flex-1 justify-center items-center bg-white dark:bg-black">
         <ActivityIndicator
@@ -312,7 +312,11 @@ export default function Profile() {
       <Modal animationType="fade" transparent visible={showDeleteModal}>
         <Pressable
           className="flex-1 bg-black/50 justify-center items-center"
-          onPress={() => setShowDeleteModal(false)}
+          onPress={() => {
+            if (!requestingDeletion) {
+              setShowDeleteModal(false);
+            }
+          }}
         >
           <Pressable className="p-6 rounded-2xl mx-4 w-[90%] max-w-sm bg-white dark:bg-neutral-900">
             <Text className="text-xl font-bold text-center mb-4">
@@ -328,13 +332,15 @@ export default function Profile() {
               <TouchableOpacity
                 className="flex-1 p-4 bg-neutral-100 dark:bg-neutral-800 rounded-lg"
                 onPress={() => setShowDeleteModal(false)}
+                disabled={requestingDeletion}
               >
-                <Text className="text-center font-semibold">Cancel</Text>
+                <Text className="text-center font-semibold">Not now</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 className="flex-1 bg-red-500 dark:bg-red-700 p-4 rounded-lg"
                 onPress={confirmDelete}
+                disabled={requestingDeletion}
               >
                 <Text className="text-center font-semibold text-white">
                   Deactivate

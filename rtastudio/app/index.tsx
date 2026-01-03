@@ -17,7 +17,7 @@ import { fetchUserProfile } from "@/lib/api";
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const handleAuth = async () => {
     setLoading(true);

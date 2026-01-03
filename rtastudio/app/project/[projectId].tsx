@@ -322,6 +322,43 @@ export default function ProjectCanvasScreen() {
     setTimeout(() => sendAuthToWeb(), 150);
   };
 
+  // Inject session after WebView loads
+  useEffect(() => {
+    if (webViewLoaded && session && webviewRef.current) {
+      // Add a small delay to ensure WebView is fully ready
+      const timer = setTimeout(() => {
+        const sessionToken = {
+          currentSession: {
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+            token_type: "bearer",
+            user: { id: session.user.id },
+          },
+          currentUser: { id: session.user.id },
+        };
+
+        const injectScript = `
+          (function() {
+            try {
+              const token = ${JSON.stringify(sessionToken)};
+              localStorage.setItem("supabase.auth.token", JSON.stringify(token));
+              // Also try the alternative key that some Supabase versions use
+              localStorage.setItem("sb-rtastudio-auth-token", JSON.stringify(token));
+              window.dispatchEvent(new Event("storage"));
+              window.ReactNativeWebView.postMessage("✅ Session injected after load");
+            } catch (e) {
+              window.ReactNativeWebView.postMessage("❌ Post-load injection error: " + e.message);
+            }
+          })();
+        `;
+
+        webviewRef.current?.injectJavaScript(injectScript);
+      }, 1000); // 1 second delay
+
+      return () => clearTimeout(timer);
+    }
+  }, [webViewLoaded, session]);
+
   return (
     <SafeAreaView className="flex-1 bg-white dark:bg-black">
       <View style={{ flex: 1 }}>
