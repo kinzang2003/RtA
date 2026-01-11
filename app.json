@@ -1,0 +1,73 @@
+{
+  "expo": {
+    "name": "rtastudio",
+    "slug": "rtastudio",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "rtastudio-app",
+    "deepLinks": true,
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff",
+      "permissions": [
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.devkdishere.rtastudio",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "rtastudio-app"
+            ]
+          }
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.devkdishere.rtastudio",
+      "scheme": "rtastudio-app",
+      "blockedPermissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "5b876950-83fa-4983-8b40-77e9d4f210bc"
+      }
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-router"
+    ]
+  },
+  "web": {
+    "bundler": "metro",
+    "output": "static",
+    "favicon": "./assets/images/favicon.png"
+  },
+  "plugins": [
+    "expo-router",
+    "expo-secure-store",
+    "expo-image-picker",
+    {
+      "photosPermission": "The app accesses your photos to let you provide feedback."
+    }
+  ],
+  "experiments": {
+    "typedRoutes": true
+  }
+}
