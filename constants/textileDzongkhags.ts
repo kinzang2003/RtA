@@ -1,17 +1,39 @@
 // textileDzongkhags.ts
-export const textileDzongkhags = {
-  BTGA: require("../assets/textiles/Hortha_Jalo.png"),
-  BT33: require("../assets/textiles/mathra.jpg"),
-  BT32: require("../assets/textiles/Yathra.jpg"),
-  BT24: require("../assets/textiles/lungerserma.jpg"),
-  BT44: require("../assets/textiles/Kushuthara.png"),
-  BT34: require("../assets/textiles/Nettle_Bura.jpg"),
-  BT42: require("../assets/textiles/Sethra.jpg"),
-  BT43: require("../assets/textiles/Pangtsi.jpg"),
-  BT41: require("../assets/textiles/Dromchuchema.jpg"),
-  BT45: require("../assets/textiles/kera.png"),
-  BT23: require("../assets/textiles/Hortha_Jalo.png"),
+type RemoteImageSource = { uri: string };
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const TEXTILES_BUCKET = process.env.EXPO_PUBLIC_TEXTILES_BUCKET || "textiles_map";
+
+function textilePublicUrl(fileName: string): string {
+  // Allow callers to pass a full public URL directly.
+  // This prevents accidental double-encoding like:
+  //   textilePublicUrl('https://.../public/bucket/file.jpg')
+  // which would otherwise produce an invalid URL.
+  if (/^https?:\/\//i.test(fileName)) return fileName;
+  if (!SUPABASE_URL) return fileName;
+  // Public bucket URL: <supabase>/storage/v1/object/public/<bucket>/<path>
+  const encoded = encodeURIComponent(fileName);
+  return `${SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/${TEXTILES_BUCKET}/${encoded}`;
+}
+
+export const textileDzongkhags: Record<string, RemoteImageSource> = {
+  BTGA: { uri: textilePublicUrl("https://mmuqlxsvhlnghfaeoyyh.supabase.co/storage/v1/object/public/textiles_map/Hortha_Jalo.png") },
+  BT33: { uri: textilePublicUrl("https://mmuqlxsvhlnghfaeoyyh.supabase.co/storage/v1/object/public/textiles_map/mathra.jpg") },
+  BT32: { uri: textilePublicUrl("https://mmuqlxsvhlnghfaeoyyh.supabase.co/storage/v1/object/public/textiles_map/Yathra.jpg") },
+  BT24: { uri: textilePublicUrl("https://mmuqlxsvhlnghfaeoyyh.supabase.co/storage/v1/object/public/textiles_map/lungerserma.jpg") },
+  BT44: { uri: textilePublicUrl("https://mmuqlxsvhlnghfaeoyyh.supabase.co/storage/v1/object/public/textiles_map/Kushuthara.png") },
+  BT34: { uri: textilePublicUrl("https://mmuqlxsvhlnghfaeoyyh.supabase.co/storage/v1/object/public/textiles_map/Nettle_Bura.jpg") },
+  BT42: { uri: textilePublicUrl("https://mmuqlxsvhlnghfaeoyyh.supabase.co/storage/v1/object/public/textiles_map/Sethra.jpg") },
+  BT43: { uri: textilePublicUrl("https://mmuqlxsvhlnghfaeoyyh.supabase.co/storage/v1/object/public/textiles_map/Pangtsi.jpg") },
+  BT41: { uri: textilePublicUrl("https://mmuqlxsvhlnghfaeoyyh.supabase.co/storage/v1/object/public/textiles_map/Dromchuchema.jpg") },
+  BT45: { uri: textilePublicUrl("https://mmuqlxsvhlnghfaeoyyh.supabase.co/storage/v1/object/public/textiles_map/kera.png") },
+  BT23: { uri: textilePublicUrl("https://mmuqlxsvhlnghfaeoyyh.supabase.co/storage/v1/object/public/textiles_map/Hortha_Jalo.png") },
 };
+
+// Convenience export: all map textile image URLs (deduped) for prefetching at app start.
+export const dzongkhagTextileImageUrls: string[] = Array.from(
+  new Set(Object.values(textileDzongkhags).map((img) => img.uri).filter(Boolean))
+);
 
 // Extracted path data from SvgComponent.tsx
 export const dzongkhagPaths = {

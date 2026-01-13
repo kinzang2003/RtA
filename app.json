@@ -6,16 +6,12 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "rtastudio-app",
-    "deepLinks": true,
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff",
-      "permissions": [
-        "READ_MEDIA_IMAGES"
-      ]
+      "backgroundColor": "#ffffff"
     },
     "ios": {
       "supportsTablet": true,
@@ -51,23 +47,8 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-router"
+      "expo-router",
+      "expo-font"
     ]
-  },
-  "web": {
-    "bundler": "metro",
-    "output": "static",
-    "favicon": "./assets/images/favicon.png"
-  },
-  "plugins": [
-    "expo-router",
-    "expo-secure-store",
-    "expo-image-picker",
-    {
-      "photosPermission": "The app accesses your photos to let you provide feedback."
-    }
-  ],
-  "experiments": {
-    "typedRoutes": true
   }
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
-import { supabase } from "./supabase";
-import { logger } from "./logger";
+import { supabase } from "@/lib/supabase";
+import { logger } from "@/lib/logger";
 
 let cachedUser: User | null = null;
 let listeners = new Set<(user: User | null) => void>();

@@ -2,6 +2,7 @@ import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
 import { signOut } from "@/lib/auth-store";
+import { handleAuthRedirectUrl } from "@/lib/auth-redirect";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -17,53 +18,31 @@ export type SessionInfo = {
 
 export function getRedirectUri() {
   // returns rtastudio-app://auth in standalone
-  return Linking.createURL("auth");
+    return Linking.createURL("auth", { scheme: "rtastudio-app" });
 }
 
-export async function openWebLogin(): Promise<SessionInfo | null> {
+export async function openWebLogin(mode: "signin" | "signup" = "signin"): Promise<SessionInfo | null> {
+  const baseUrl =
+    process.env.EXPO_PUBLIC_WEB_AUTH_URL ||
+    process.env.EXPO_PUBLIC_WEB_EDITOR_URL;
+
+  if (!baseUrl) {
+    throw new Error("Missing EXPO_PUBLIC_WEB_EDITOR_URL");
+  }
+
   const redirectUri = getRedirectUri();
+  const url = new URL("/auth", baseUrl.replace(/\/$/, ""));
+  url.searchParams.set("app", "1");
+  url.searchParams.set("mode", mode);
+  url.searchParams.set("app_redirect", redirectUri);
 
-  const webAuthUrl =
-    `${process.env.EXPO_PUBLIC_WEB_AUTH_URL}` +
-    `?app=1&app_redirect=${encodeURIComponent(redirectUri)}`;
+  const result = await WebBrowser.openAuthSessionAsync(url.toString(), redirectUri);
+  if (result.type === "success" && result.url) {
+    // Some platforms return the redirect URL directly; process it to be safe.
+    await handleAuthRedirectUrl(result.url);
+  }
 
-  const result = await WebBrowser.openAuthSessionAsync(
-    webAuthUrl,
-    redirectUri
-  );
-
-  if (result.type !== "success" || !result.url) return null;
-
-  const params = new URLSearchParams(
-    result.url.split("?")[1] ?? ""
-  );
-
-  const access_token = params.get("access_token");
-  const refresh_token = params.get("refresh_token");
-
-  if (!access_token || !refresh_token) return null;
-
-  await supabase.auth.setSession({
-    access_token,
-    refresh_token,
-  });
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return null;
-
-  // Supabase stores session via SecureStoreAdapter automatically
-  // No need to manually store—avoid 2048 byte SecureStore limit
-  const session: SessionInfo = {
-    user_id: user.id,
-    email: user.email ?? undefined,
-    access_token,
-    refresh_token,
-  };
-
-  return session;
+  return restoreSession();
 }
 
 export async function restoreSession(): Promise<SessionInfo | null> {

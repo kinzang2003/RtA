@@ -21,9 +21,6 @@ export const logger = {
   info: (...args: any[]) => {
     if (isDev) safeConsole("info", ...args);
   },
-  // Hide warnings in production to avoid leaking internals/PII
-  warn: (...args: any[]) => {
-    if (isDev) safeConsole("warn", ...args);
-  },
+  warn: (...args: any[]) => safeConsole("warn", ...args),
   error: (...args: any[]) => safeConsole("error", ...args),
 };

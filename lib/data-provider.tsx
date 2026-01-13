@@ -3,11 +3,11 @@
  * Prefetches all user data after login and provides it to tabs via Context
  */
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { fetchAllProjects, fetchUserProfile, fetchTextiles, clearAllCache, Textile, UserProfile } from "./api";
-import { ProjectMeta } from "./types";
-import { useAuthStatus } from "./auth-store";
-import { logger } from "./logger";
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
+import { fetchAllProjects, fetchUserProfile, fetchTextiles, clearAllCache, Textile, UserProfile } from "@/lib/api";
+import { ProjectMeta } from "@/lib/types";
+import { useAuthStatus } from "@/lib/auth-store";
+import { logger } from "@/lib/logger";
 
 interface DataState {
   // Projects
@@ -42,6 +42,7 @@ const DataContext = createContext<DataState | null>(null);
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
   const { user, authReady } = useAuthStatus();
+  const lastUserIdRef = useRef<string | null>(null);
   
   // Projects state
   const [ownedProjects, setOwnedProjects] = useState<ProjectMeta[]>([]);
@@ -168,21 +169,32 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // Initial load when user logs in
   useEffect(() => {
-    // Wait for auth restoration to complete to avoid treating a restoring session
-    // as a logout (which would clear caches and potentially disrupt session usage).
+    // Wait for auth restoration to complete so we don't mis-handle startup.
     if (!authReady) return;
 
-    if (user) {
-      logger.info("[DataProvider] User logged in, prefetching data");
+    const currentUserId = user?.id ?? null;
+    const previousUserId = lastUserIdRef.current;
+
+    // Only react to actual login/logout transitions.
+    // This prevents an infinite update loop on cold start when user is null.
+    if (previousUserId === currentUserId) return;
+    lastUserIdRef.current = currentUserId;
+
+    if (currentUserId) {
+      logger.info("[DataProvider] User logged in, prefetching data", { userId: currentUserId });
       loadProjects();
       loadProfile();
-    } else {
-      // Clear data on logout
-      logger.info("[DataProvider] User logged out, clearing data");
+      return;
+    }
+
+    // Logout transition (was logged in, now null) OR first authReady transition.
+    // Clear user-scoped data. Avoid clearing on first-ever startup logged-out.
+    if (previousUserId) {
+      logger.info("[DataProvider] User logged out, clearing data", { prevUserId: previousUserId });
       setOwnedProjects([]);
       setCollaboratedProjects([]);
       setUserProfile(null);
-      clearAllCache();
+      void clearAllCache();
     }
   }, [authReady, user, loadProjects, loadProfile]);
 

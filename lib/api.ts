@@ -3,10 +3,12 @@
  * Real-world pattern: Single source of truth for all API calls
  */
 
-import { supabase } from "./supabase";
+import { supabase } from "@/lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ProjectMeta } from "./types";
-import { logger } from "./logger";
+import { ProjectMeta } from "@/lib/types";
+import { logger } from "@/lib/logger";
+import { Image } from "react-native";
+import { dzongkhagTextileImageUrls } from "@/constants/textileDzongkhags";
 
 // ============ CACHING UTILITIES ============
 
@@ -20,7 +22,36 @@ const CACHE_KEYS = {
   TEXTILES: "cache:textiles",
   PROJECTS: "cache:projects",
   PROFILE: "cache:profile",
+  DZONGKHAG_MAP_IMAGES: "cache:dzongkhag_map_images",
 } as const;
+
+const DZONGKHAG_MAP_IMAGES_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+// AsyncStorage on Android is backed by SQLite and can hit size limits.
+// Keep cache entries small and resilient.
+const MAX_CACHE_CHARS = 200_000; // ~200KB-ish (rough), avoids SQLITE_FULL on larger payloads
+
+function isSqliteFullError(error: unknown): boolean {
+  const message =
+    error && typeof error === "object" && "message" in error
+      ? String((error as any).message)
+      : String(error ?? "");
+  return message.toLowerCase().includes("sqlite_full") || message.toLowerCase().includes("database or disk is full");
+}
+
+function minimizeProjectMeta(projects: ProjectMeta[]): ProjectMeta[] {
+  return (projects ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    description: p.description ?? null,
+    owner_id: p.owner_id,
+    created_at: p.created_at,
+    updated_at: p.updated_at,
+    access_type: p.access_type,
+    thumbnail_url: p.thumbnail_url ?? null,
+    // Intentionally omit layers_data / thumbnail_config from list caches
+  }));
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number, context: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -71,13 +102,68 @@ async function setCachedData<T>(
       timestamp: Date.now(),
       expiresIn,
     };
-    await AsyncStorage.setItem(key, JSON.stringify(entry));
+    const serialized = JSON.stringify(entry);
+
+    // Avoid storing huge values that can break AsyncStorage on Android.
+    if (serialized.length > MAX_CACHE_CHARS) {
+      logger.warn("[Cache] Skipping cache write (too large)", {
+        key,
+        chars: serialized.length,
+      });
+      return;
+    }
+
+    await AsyncStorage.setItem(key, serialized);
   } catch (error) {
+    // If storage is full, clear our cache and skip (or we can retry once for small entries).
+    if (isSqliteFullError(error)) {
+      logger.warn("[Cache] Storage full; clearing cache", { key });
+      await clearAllCache();
+      return;
+    }
+
     logger.error("[Cache] Failed to cache", key, error);
   }
 }
 
 // ============ TEXTILE API ============
+
+type ImagePrefetchCache = {
+  urls: string[];
+  okCount: number;
+  total: number;
+};
+
+/**
+ * Prefetch Bhutan map textile images (public bucket) during startup.
+ * Uses OS-level image caching via Image.prefetch; we additionally store a small TTL entry
+ * in AsyncStorage so we don't aggressively re-prefetch on every cold start.
+ */
+export async function prefetchDzongkhagMapImages(
+  forceRefresh: boolean = false
+): Promise<ImagePrefetchCache> {
+  const urls = (dzongkhagTextileImageUrls ?? []).filter(Boolean);
+  if (urls.length === 0) {
+    return { urls: [], okCount: 0, total: 0 };
+  }
+
+  if (!forceRefresh) {
+    const cached = await getCachedData<ImagePrefetchCache>(CACHE_KEYS.DZONGKHAG_MAP_IMAGES);
+    if (cached?.urls?.length) {
+      logger.debug("[API] Bhutan map images prefetch skipped (cache valid)");
+      return cached;
+    }
+  }
+
+  // Prefetch in parallel but don't fail the whole call if a single image fails.
+  const settled = await Promise.allSettled(urls.map((uri) => Image.prefetch(uri)));
+  const okCount = settled.filter((r) => r.status === "fulfilled" && r.value === true).length;
+
+  const result: ImagePrefetchCache = { urls, okCount, total: urls.length };
+  await setCachedData(CACHE_KEYS.DZONGKHAG_MAP_IMAGES, result, DZONGKHAG_MAP_IMAGES_TTL_MS);
+  logger.debug("[API] Bhutan map images prefetched", result);
+  return result;
+}
 
 export interface Textile {
   id: string;
@@ -187,9 +273,11 @@ export async function fetchOwnedProjects(
     throw new Error("Missing web editor URL");
   }
 
+  const projectsUrl = new URL("/api/projects", baseUrl).toString();
+
   const start = Date.now();
   const resp = await withTimeout(
-    fetch(`${baseUrl}/api/projects`, {
+    fetch(projectsUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
     15000,
@@ -207,9 +295,10 @@ export async function fetchOwnedProjects(
 
   const payload = await resp.json();
   const projects: ProjectMeta[] = (payload?.owned ?? []) as ProjectMeta[];
+  const toCache = minimizeProjectMeta(projects).slice(0, 100);
 
   // Cache for 2 minutes
-  await setCachedData(cacheKey, projects, 2 * 60 * 1000);
+  await setCachedData(cacheKey, toCache, 2 * 60 * 1000);
 
   return projects;
 }
@@ -247,9 +336,11 @@ export async function fetchCollaboratedProjects(
     throw new Error("Missing web editor URL");
   }
 
+  const projectsUrl = new URL("/api/projects", baseUrl).toString();
+
   const start = Date.now();
   const resp = await withTimeout(
-    fetch(`${baseUrl}/api/projects`, {
+    fetch(projectsUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     }),
     15000,
@@ -267,9 +358,10 @@ export async function fetchCollaboratedProjects(
 
   const payload = await resp.json();
   const projects = (payload?.collaborated ?? []) as ProjectMeta[];
+  const toCache = minimizeProjectMeta(projects).slice(0, 100);
 
   // Cache for 2 minutes
-  await setCachedData(cacheKey, projects, 2 * 60 * 1000);
+  await setCachedData(cacheKey, toCache, 2 * 60 * 1000);
 
   return projects;
 }

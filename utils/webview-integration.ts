@@ -4,6 +4,7 @@
  */
 
 import { User } from "@supabase/supabase-js";
+import { logger } from "@/lib/logger";
 
 export interface WebViewMessage {
   type: "auth.session" | "project.load" | "project.save" | "error";
@@ -20,7 +21,8 @@ export interface WebViewResponse {
     | "collaborators.update"
     | "console"
     | "auth.request"
-    | "request-supabase-session"; // alias used by web bridge
+    | "request-supabase-session" // alias used by web bridge
+    | "supabase-session-imported"; // ack from web after session import
   payload?: Record<string, any>;
 }
 
@@ -36,9 +38,7 @@ export function createPostMessageJS(message: WebViewMessage): string {
       try {
         const message = ${messageJSON};
         window.postMessage(message, "*");
-        console.log("[WebView] Sent message:", message.type);
       } catch (error) {
-        console.error("[WebView] Failed to send message:", error);
       }
     })();
     true;
@@ -125,13 +125,13 @@ export function parseWebViewResponse(
 
     // Validate message has required fields
     if (!message.type) {
-      console.warn("[WebView] Invalid message format: missing type", message);
+      logger.warn("[WebView] Invalid message format: missing type", message);
       return null;
     }
 
     return message as WebViewResponse;
   } catch (error) {
-    console.error("[WebView] Failed to parse message:", error);
+    logger.error("[WebView] Failed to parse message", error);
     return null;
   }
 }
@@ -191,14 +191,12 @@ export function isValidUUID(id: string): boolean {
  */
 export const webViewLogger = {
   info: (message: string, data?: any) => {
-    if (__DEV__) {
-      console.log(`[WebView Integration] ${message}`, data);
-    }
+    logger.info(`[WebView Integration] ${message}`, data);
   },
   error: (message: string, error?: any) => {
-    console.error(`[WebView Integration] ${message}`, error);
+    logger.error(`[WebView Integration] ${message}`, error);
   },
   warn: (message: string, data?: any) => {
-    console.warn(`[WebView Integration] ${message}`, data);
+    logger.warn(`[WebView Integration] ${message}`, data);
   },
 };

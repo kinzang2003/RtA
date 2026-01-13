@@ -17,6 +17,7 @@ export const supabase = createClient(
   SUPABASE_ANON_KEY,
   {
     auth: {
+      flowType: "pkce",
       storage: AsyncStorageAdapter,
       autoRefreshToken: true,
       persistSession: true,

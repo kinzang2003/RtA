@@ -6,7 +6,7 @@
 import { useColorScheme as useRNColorScheme, ColorSchemeName, Appearance } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useEffect, useState, useContext, createContext, useCallback, ReactNode } from "react";
-import { logger } from "./logger";
+import { logger } from "@/lib/logger";
 
 const THEME_KEY = "app:theme";
 
