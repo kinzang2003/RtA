@@ -3,6 +3,7 @@ import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
 import { signOut } from "@/lib/auth-store";
 import { handleAuthRedirectUrl } from "@/lib/auth-redirect";
+import { getWebAuthUrl } from "@/lib/web-url";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -22,16 +23,8 @@ export function getRedirectUri() {
 }
 
 export async function openWebLogin(mode: "signin" | "signup" = "signin"): Promise<SessionInfo | null> {
-  const baseUrl =
-    process.env.EXPO_PUBLIC_WEB_AUTH_URL ||
-    process.env.EXPO_PUBLIC_WEB_EDITOR_URL;
-
-  if (!baseUrl) {
-    throw new Error("Missing EXPO_PUBLIC_WEB_EDITOR_URL");
-  }
-
   const redirectUri = getRedirectUri();
-  const url = new URL("/auth", baseUrl.replace(/\/$/, ""));
+  const url = new URL(getWebAuthUrl());
   url.searchParams.set("app", "1");
   url.searchParams.set("mode", mode);
   url.searchParams.set("app_redirect", redirectUri);

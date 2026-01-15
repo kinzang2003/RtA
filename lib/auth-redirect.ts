@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { logger } from "@/lib/logger";
+import { getWebApiUrl } from "@/lib/web-url";
 
 let lastHandledKey: string | null = null;
 let lastHandledAt = 0;
@@ -38,17 +39,7 @@ export async function handleAuthRedirectUrl(url: string) {
   if (handoff) {
     if (shouldSkip(`handoff:${handoff}`)) return;
 
-    const baseUrl =
-      process.env.EXPO_PUBLIC_WEB_AUTH_URL ||
-      process.env.EXPO_PUBLIC_WEB_EDITOR_URL;
-
-    if (!baseUrl) {
-      throw new Error("Missing EXPO_PUBLIC_WEB_EDITOR_URL");
-    }
-
-    // Important: baseUrl may include a path (e.g. http://host:3000/auth).
-    // Using URL("/api/...", baseUrl) ensures we always hit the correct root API route.
-    const exchangeUrl = new URL("/api/auth/handoff/exchange", baseUrl).toString();
+    const exchangeUrl = getWebApiUrl("/api/auth/handoff/exchange");
 
     const res = await fetch(exchangeUrl, {
       method: "POST",

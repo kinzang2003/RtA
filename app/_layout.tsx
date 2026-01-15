@@ -1,7 +1,15 @@
 // rtastudio/app/_layout.tsx
 import { Stack, useSegments } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, View, BackHandler, Alert, Platform } from "react-native";
+import {
+  ActivityIndicator,
+  View,
+  BackHandler,
+  Alert,
+  Platform,
+  Text,
+  Pressable,
+} from "react-native";
 import * as SplashScreen from "expo-splash-screen";
 import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
@@ -51,8 +59,22 @@ export default function RootLayout() {
 function RootLayoutInner() {
   const { colorScheme } = useTheme();
   const [isReady, setIsReady] = useState(false);
+  const [startupTimedOut, setStartupTimedOut] = useState(false);
   const { user, authReady } = useAuthStatus();
   const segments = useSegments() as string[];
+
+  const missingEnvVars: string[] = [];
+  if (!process.env.EXPO_PUBLIC_SUPABASE_URL) missingEnvVars.push("EXPO_PUBLIC_SUPABASE_URL");
+  if (!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) missingEnvVars.push("EXPO_PUBLIC_SUPABASE_ANON_KEY");
+
+  const restartApp = async () => {
+    if (Platform.OS === "android") {
+      BackHandler.exitApp();
+      return;
+    }
+
+    Alert.alert("Restart required", "Please fully close and reopen the app.");
+  };
 
   // 1️⃣ Initialize: kick off any non-auth startup work
   useEffect(() => {
@@ -80,6 +102,30 @@ function RootLayoutInner() {
     SplashScreen.hideAsync().catch(() => {
       // noop: avoid crashing on repeated calls
     });
+  }, [isReady, authReady]);
+
+  // If critical env vars are missing, unblock UI and show a clear error.
+  useEffect(() => {
+    if (missingEnvVars.length === 0) return;
+    SplashScreen.hideAsync().catch(() => {
+      // noop
+    });
+  }, [missingEnvVars.length]);
+
+  // Production safety: never block the app indefinitely behind the splash screen
+  // if session restoration stalls (device storage quirks, edge-case native issues, etc.).
+  useEffect(() => {
+    if (!isReady) return;
+    if (authReady) return;
+
+    const timer = setTimeout(() => {
+      setStartupTimedOut(true);
+      SplashScreen.hideAsync().catch(() => {
+        // noop
+      });
+    }, 12000);
+
+    return () => clearTimeout(timer);
   }, [isReady, authReady]);
 
   // 2️⃣ Handle deep link OAuth redirects (rtastudio-app://auth?access_token=...&refresh_token=...)
@@ -181,8 +227,148 @@ function RootLayoutInner() {
     return () => backHandler.remove();
   }, [segments]);
 
+  if (missingEnvVars.length > 0) {
+    const showDiagnostics = typeof __DEV__ !== "undefined" && __DEV__;
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          padding: 24,
+          backgroundColor: colorScheme === "dark" ? "#000" : "#fff",
+        }}
+      >
+        <Text
+          style={{
+            color: colorScheme === "dark" ? "#fff" : "#000",
+            fontSize: 16,
+            fontWeight: "700",
+            textAlign: "center",
+            marginBottom: 10,
+            maxWidth: 520,
+          }}
+        >
+          App configuration error
+        </Text>
+        <Text
+          style={{
+            color: colorScheme === "dark" ? "#ddd" : "#333",
+            fontSize: 13,
+            textAlign: "center",
+            maxWidth: 520,
+            lineHeight: 18,
+          }}
+        >
+          There’s a configuration problem with this build.
+        </Text>
+        <View style={{ height: 8 }} />
+        <Text
+          style={{
+            color: colorScheme === "dark" ? "#aaa" : "#555",
+            fontSize: 12,
+            textAlign: "center",
+            maxWidth: 520,
+          }}
+        >
+          Error code: CONFIG_MISSING
+        </Text>
+
+        {showDiagnostics ? (
+          <>
+            <View style={{ height: 10 }} />
+            <Text
+              style={{
+                color: colorScheme === "dark" ? "#aaa" : "#555",
+                fontSize: 12,
+                textAlign: "center",
+                maxWidth: 520,
+              }}
+            >
+              Missing: {missingEnvVars.join(", ")}
+            </Text>
+          </>
+        ) : null}
+
+        <View style={{ height: 16 }} />
+        <Pressable
+          onPress={restartApp}
+          style={{
+            paddingVertical: 10,
+            paddingHorizontal: 14,
+            borderRadius: 8,
+            backgroundColor: colorScheme === "dark" ? "#222" : "#eee",
+          }}
+        >
+          <Text style={{ color: colorScheme === "dark" ? "#fff" : "#000" }}>
+            Restart app
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   // Show loading splash while initializing
   if (!isReady || !authReady) {
+    if (startupTimedOut) {
+      return (
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 24,
+            backgroundColor: colorScheme === "dark" ? "#000" : "#fff",
+          }}
+        >
+          <ActivityIndicator
+            size="large"
+            color={colorScheme === "dark" ? "#fff" : "#000"}
+          />
+          <View style={{ height: 16 }} />
+          <Text
+            style={{
+              color: colorScheme === "dark" ? "#fff" : "#000",
+              fontSize: 16,
+              fontWeight: "600",
+              textAlign: "center",
+              marginBottom: 8,
+              maxWidth: 520,
+            }}
+          >
+            Startup is taking longer than expected
+          </Text>
+          <Text
+            style={{
+              color: colorScheme === "dark" ? "#ddd" : "#333",
+              fontSize: 13,
+              textAlign: "center",
+              maxWidth: 520,
+              lineHeight: 18,
+            }}
+          >
+            Please try restarting the app. If it keeps happening, contact support with code STARTUP_TIMEOUT.
+          </Text>
+
+          <View style={{ height: 16 }} />
+          <Pressable
+            onPress={() => {
+              void restartApp();
+            }}
+            style={{
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              borderRadius: 8,
+              backgroundColor: colorScheme === "dark" ? "#222" : "#eee",
+            }}
+          >
+            <Text style={{ color: colorScheme === "dark" ? "#fff" : "#000" }}>
+              Restart app
+            </Text>
+          </Pressable>
+        </View>
+      );
+    }
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colorScheme === "dark" ? "#000" : "#fff" }}>
         <ActivityIndicator size="large" color={colorScheme === "dark" ? "#fff" : "#000"} />

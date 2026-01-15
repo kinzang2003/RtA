@@ -12,17 +12,46 @@ let lastAuthUserId: string | null = null;
 
 let initPromise: Promise<void> | null = null;
 
+const INITIAL_SESSION_TIMEOUT_MS = 6000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, context: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Timeout after ${ms}ms (${context})`));
+    }, ms);
+
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
 function ensureInitialized(): Promise<void> {
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
     // Initial load (app start / reload)
     try {
-      const { data } = await supabase.auth.getSession();
+      const { data } = await withTimeout(
+        supabase.auth.getSession(),
+        INITIAL_SESSION_TIMEOUT_MS,
+        "supabase.auth.getSession"
+      );
       cachedUser = data.session?.user ?? null;
       logger.info("[AuthStore] Initial session restored", {
         userId: cachedUser?.id ?? null,
       });
+      notify(cachedUser);
+    } catch (error) {
+      // Fail-open: allow app to render logged-out screens instead of hanging forever.
+      cachedUser = null;
+      logger.warn("[AuthStore] Initial session restore failed", error);
       notify(cachedUser);
     } finally {
       if (!authReady) {
